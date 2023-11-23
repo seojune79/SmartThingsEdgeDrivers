@@ -36,3 +36,4 @@ preferences:
 metadata:
   mnmn: SolutionsEngineering
   vid: SmartThings-smartthings-Aqara_LED_Strip_Driver_ColorTemperature
+  # vid: b817138d-d570-3d93-8314-03d0f4dd6c15 # 카드(O),카드제어(X),다국어(X)

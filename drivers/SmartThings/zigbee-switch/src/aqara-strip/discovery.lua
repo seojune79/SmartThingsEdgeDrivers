@@ -8,7 +8,7 @@ function discovery.handle_discovery(driver, _should_continue)
     type = "ZIGBEE",
     device_network_id = "aqara-stripdriver",
     label = "aqara-stripdriver",
-    profile = "aqara-led-rgbw",
+    profile = "aqara-led-temperature",
     manufacturer = "SmartThings",
     model = "v1",
     vendor_provided_label = nil

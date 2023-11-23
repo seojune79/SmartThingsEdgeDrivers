@@ -259,11 +259,11 @@ local function op_mode_handler(driver, device, value)
   if not device:get_field(MODE_STATUS) then -- before init
     print(string.format("----- [op_mode_handler] before init"))
     device:set_field(MODE_STATUS, "init", {persist = true})
-    if current_mode == COLOR_TEMP_MODE then
+    if current_mode == RGBW_MODE then
       device:send(cluster_base.write_manufacturer_specific_attribute(device,
-        PRI_CLU, OP_MODE_ATTR, MFG_CODE, data_types.Uint32, COLOR_TEMP_MODE))
+        PRI_CLU, OP_MODE_ATTR, MFG_CODE, data_types.Uint32, RGBW_MODE))
     else
-      device:emit_event(capabilities.mode.mode(SUPPORTED_MODES[1]))
+      device:emit_event(capabilities.mode.mode(SUPPORTED_MODES[2]))
       do_refresh(driver, device)
     end
   elseif device:get_field(MODE_STATUS) == "init" then -- init
