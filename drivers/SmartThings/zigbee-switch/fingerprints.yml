@@ -70,6 +70,11 @@ zigbeeManufacturer:
     manufacturer: LUMI
     model: lumi.light.acn004
     deviceProfileName: aqara-light
+  - id: "LUMI/lumi.dimmer.rcbac1"
+    deviceLabel: Aqara Smart LED Lightstrip Driver
+    manufacturer: LUMI
+    model: lumi.dimmer.rcbac1
+    deviceProfileName: aqara-led-rgbw
   # VIMAR
   - id: "Vimar/xx592-2-way-smart-switch"
     deviceLabel: Vimar 2-way Smart Switch

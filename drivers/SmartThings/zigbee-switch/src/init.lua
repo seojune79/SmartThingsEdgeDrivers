@@ -86,6 +86,7 @@ local zigbee_switch_driver_template = {
     require("hanssem"),
     require("aqara"),
     require("aqara-light"),
+    require("aqara-strip"),
     require("ezex"),
     require("rexense"),
     require("sinope"),
