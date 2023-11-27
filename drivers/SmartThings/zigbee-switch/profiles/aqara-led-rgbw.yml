@@ -4,17 +4,23 @@ components:
   capabilities:
   - id: switch
     version: 1
-  - id: switchLevel
-    version: 1
-  - id: colorTemperature
-    version: 1
-  - id: colorControl
-    version: 1
   - id: mode
     version: 1
   - id: refresh
     version: 1
   - id: firmwareUpdate
+    version: 1
+  categories:
+  - name: Light
+- id: lamp1
+  capabilities:
+  - id: switch
+    version: 1
+  - id: switchLevel
+    version: 1
+  - id: colorTemperature
+    version: 1
+  - id: colorControl
     version: 1
   categories:
   - name: Light
@@ -25,6 +31,4 @@ preferences:
     explicit: true
   - preferenceId: stse.lightFadeOutTimeInSec
     explicit: true
-metadata:
-  mnmn: SolutionsEngineering
-  vid: SmartThings-smartthings-Aqara_LED_Strip_Driver_RGBW
+

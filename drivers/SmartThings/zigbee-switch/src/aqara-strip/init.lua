@@ -5,6 +5,7 @@ local data_types = require "st.zigbee.data_types"
 local utils = require "st.utils"
 local switch_defaults = require "st.zigbee.defaults.switch_defaults"
 local discovery = require "aqara-strip/discovery"
+local device_management = require "st.zigbee.device_management"
 local OnOff = clusters.OnOff
 local ColorControl = clusters.ColorControl
 local Level = clusters.Level
@@ -15,6 +16,9 @@ local MFG_CODE = 0x115F
 local OP_MODE_ATTR = 0x0509
 local SUB_MODE_ATTR = 0x050F
 
+local MAIN_COMP = "main"
+local LAMP1_COMP = "lamp1"
+local LAMP2_COMP = "lamp2"
 local CURRENT_X = "current_x_value" -- y value from xyY color space
 local CURRENT_Y = "current_y_value" -- x value from xyY color space
 local Y_TRISTIMULUS_VALUE = "y_tristimulus_value" -- Y tristimulus value which is used to convert color xyY -> RGB -> HSV
@@ -49,6 +53,44 @@ local query_device = function(device)
     device:send(ColorControl.attributes.CurrentX:read(device))
     device:send(ColorControl.attributes.CurrentY:read(device))
   end
+end
+
+local function switch_on_handler(driver, device, cmd)
+  print("----- [switch_on_handler] entry")
+  if cmd.component == "main" then
+    print("----- [switch_on_handler] main")
+    device:send(OnOff.commands.On(device):to_endpoint(1))
+    if isRGBW_MODE(device) == false then
+      print("----- [switch_on_handler] main + color temp")
+      device:send(OnOff.commands.On(device):to_endpoint(2))
+    end
+  elseif cmd.component == "lamp1" then
+    print("----- [switch_on_handler] lamp1")
+    device:send(OnOff.commands.On(device):to_endpoint(1))
+  elseif cmd.component == "lamp2" then
+    print("----- [switch_on_handler] lamp2")
+    device:send(OnOff.commands.On(device):to_endpoint(2))
+  end
+  print("----- [switch_on_handler] entry")
+end
+
+local function switch_off_handler(driver, device, cmd)
+  print("----- [switch_off_handler] entry")
+  if cmd.component == MAIN_COMP then
+    print("----- [switch_off_handler] main")
+    device:send(OnOff.commands.Off(device):to_endpoint(1))
+    if isRGBW_MODE(device) == false then
+      print("----- [switch_off_handler] main + color temp")
+      device:send(OnOff.commands.Off(device):to_endpoint(2))
+    end
+  elseif cmd.component == LAMP1_COMP then
+    print("----- [switch_off_handler] lamp1")
+    device:send(OnOff.commands.Off(device):to_endpoint(1))
+  elseif cmd.component == LAMP2_COMP then
+    print("----- [switch_off_handler] lamp2")
+    device:send(OnOff.commands.Off(device):to_endpoint(2))
+  end
+  print("----- [switch_off_handler] entry")
 end
 
 local function set_color_handler(driver, device, cmd)
@@ -124,6 +166,25 @@ end
 --   set_hue_sat_helper(driver, device, cmd, device:get_field(TARGET_HUE), cmd.args.saturation)
 -- end
 
+local function onoff_handler(driver, device, value, zb_rx)
+  print("----- [onoff_handler] entry")
+  local main_comp = device.profile.components[MAIN_COMP]
+  local lamp1_comp = device.profile.components[LAMP1_COMP]
+  local lamp2_comp = device.profile.components[LAMP2_COMP]
+  local evt = capabilities.switch.switch.off()
+  if value.value then evt = capabilities.switch.switch.on() end
+
+  if zb_rx.address_header.src_endpoint.value == 1 then
+    print("----- [onoff_handler] src endpoint = 1")
+    device:emit_component_event(main_comp, evt)
+    device:emit_component_event(lamp1_comp, evt)
+  else
+    print("----- [onoff_handler] src endpoint = 2")
+    device:emit_component_event(lamp2_comp, evt)
+  end
+  print("----- [onoff_handler] exit")
+end
+
 local function current_x_attr_handler(driver, device, value, zb_rx)
   print("-----[current_x_attr_handler]")
   local Y_tristimulus = device:get_field(Y_TRISTIMULUS_VALUE)
@@ -186,14 +247,14 @@ local function do_refresh(driver, device)
 end
 
 local function component_to_endpoint(device, component_id)
-  local endpoint = 2
-  if component_id == "main" then endpoint = 1 end
+  local endpoint = 1
+  if component_id == "lamp2" then endpoint = 2 end
   return endpoint
 end
 
 local function endpoint_to_component(device, ep)
-  local component = "sub"
-  if ep == 1 then component = "main" end
+  local component = "lamp1"
+  if ep == 2 then component = "lamp2" end
   return component
 end
 
@@ -252,6 +313,11 @@ local function device_info_changed(driver, device, event, args)
   end
 end
 
+local function do_configure(driver, device)
+  device:configure()
+  device:send(device_management.build_bind_request(device, OnOff.ID, driver.environment_info.hub_zigbee_eui))
+end
+
 local function op_mode_handler(driver, device, value)
   print(string.format("----- [op_mode_handler] entry"))
   local current_mode = value.value
@@ -295,6 +361,10 @@ local aqara_lightstrip_driver_handler = {
   NAME = "Aqara Lightstrip Driver Handler",
   discovery = discovery.handle_discovery,
   capability_handlers = {
+    [capabilities.switch.ID] = {
+      [capabilities.switch.commands.on.NAME] = switch_on_handler,
+      [capabilities.switch.commands.off.NAME] = switch_off_handler
+    },
     [capabilities.colorControl.ID] = {
       [capabilities.colorControl.commands.setColor.NAME] = set_color_handler,
       -- [capabilities.colorControl.commands.setHue.NAME] = set_hue_handler,
@@ -309,6 +379,9 @@ local aqara_lightstrip_driver_handler = {
   },
   zigbee_handlers = {
     attr = {
+      [OnOff.ID] = {
+        [OnOff.attributes.OnOff.ID] = onoff_handler
+      },
       [ColorControl.ID] = {
         [ColorControl.attributes.CurrentX.ID] = current_x_attr_handler,
         [ColorControl.attributes.CurrentY.ID] = current_y_attr_handler
@@ -322,7 +395,8 @@ local aqara_lightstrip_driver_handler = {
   lifecycle_handlers = {
     init = device_init,
     added = device_added,
-    infoChanged = device_info_changed
+    infoChanged = device_info_changed,
+    doConfigure = do_configure
   },
   can_handle = is_aqara_products
 }
