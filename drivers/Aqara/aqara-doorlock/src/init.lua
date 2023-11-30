@@ -20,26 +20,31 @@ local MFG_CODE = 0x115F
 
 local CHECK_TIME = 5
 
+local serial_num = 0
 local seq_num = 0
+local setup_device = nil
 
 my_ds = ds.init()
 
 local function my_secret_data_handler(driver, secret_info)
   -- At time of writing this returns nothind beyond "secret_type = aqara"
-  print("----- my_secret_data_handler")
+  print("----- [my_secret_data_handler] entry")
   my_ds.shared_key = secret_info.shared_key
   my_ds.cloud_public_key = secret_info.cloud_public_key
   my_ds:save()
-  -- print(string.format("-----[my_secret_data_handler] shared_key = %s", secret_info.shared_key))
-  -- print(string.format("-----[my_secret_data_handler] cloud_pub_key = %s", secret_info.cloud_public_key))
-  print(string.format("----- my_ds.shared_key = %s", my_ds.shared_key))
-  print(string.format("----- my_ds.cloud_public_key = %s", my_ds.cloud_public_key))
+  print(string.format("----- [my_secret_data_handler] my_ds.shared_key = %s", my_ds.shared_key))
+  print(string.format("----- [my_secret_data_handler] my_ds.cloud_public_key = %s", my_ds.cloud_public_key))
 
-  if my_ds.cloud_pub_key ~= nil then
+  if my_ds.cloud_public_key ~= nil and setup_device ~= nil then
+    local raw_data = base64.decode(my_ds.cloud_public_key)
     -- send cloud_pub_key
-    -- device:send(cluster_base.write_manufacturer_specific_attribute(device,
-    --   PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, "\x3E"..my_ds.cloud_pub_key))
+    setup_device:send(cluster_base.write_manufacturer_specific_attribute(setup_device,
+      PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, "\x3E"..raw_data))
+    setup_device = nil
+  else
+    print("----- [my_secret_data_handler] cloud_pub_key or setup_device is nil")
   end
+  print("----- [my_secret_data_handler] exit")
 end
 
 local function device_init(driver, device)
@@ -69,7 +74,8 @@ local callback_func = function(driver, device, cmd)
   return function()
     print(string.format("-----[callback_func] my_ds.cloud_public_key = %s", my_ds.cloud_public_key))
     if my_ds.cloud_public_key ~= nil then
-      local raw_data = base64.decode(my_ds.cloud_public_key)
+      -- local raw_data = base64.decode(my_ds.cloud_public_key)
+      local raw_data = base64.decode("SkHRJ+nnz73P+ejuxTcs8l21Nk1WwkODewHyH61AW0CFeRSsPe9UVSTZwmd/42agqXk62QW54O2XDh2TvHLN6g==")
       -- send cloud_public_key
       device:send(cluster_base.write_manufacturer_specific_attribute(device,
         PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, "\x3E" .. raw_data))
@@ -78,13 +84,19 @@ local callback_func = function(driver, device, cmd)
 end
 
 local function locks_handler(driver, device, value, zb_rx)
+  print("----- [locks_handler] entry")
   local param = value.value
-  local header = string.sub(param, 0, 1)
+  local command = string.sub(param, 0, 1)
 
-  if header == "\x3E" then
+  if command == "\x3E" then
+    if setup_device ~= nil then
+      print("ongoing setup_device exist")
+      return
+    end
     -- recv lock_pub_key
-    print("----- pub key")
-    device:set_field(CHECK_TIME, device.thread:call_with_delay(CHECK_TIME, callback_func(driver, device)))
+    print("----- [locks_handler] recv: 0x3E")
+    -- device:set_field(CHECK_TIME, device.thread:call_with_delay(CHECK_TIME, callback_func(driver, device)))
+    setup_device = device
     local zigbee_id = device.zigbee_eui
     local locks_pub_key = string.sub(param, 2, string.len(param))
     local mn_id = "0AE0"
@@ -95,17 +107,33 @@ local function locks_handler(driver, device, value, zb_rx)
     if res then
       print(res)
     end
-  elseif header == "\x00" then
-    local opts = { cipher = "aes256-ecb" }
-    local payload = security.decrypt_bytes(string.sub(param, 2, string.len(param)), my_ds.shared_key, opts)
+  elseif command == "\x93" then
+    print("----- [locks_handler] recv: 0x93")
+    local opts = { cipher = "aes256-ecb", padding = false }
+    print("----- [locks_handler/0x93] before base64.decode")
+    print(string.format("----- [locks_handler/0x93] my_ds.shared_key = %s", my_ds.shared_key))
+    local raw_key = base64.decode(my_ds.shared_key)
+    print(string.format("----- [locks_handler/0x93] raw_key = %s", raw_key))
+    print("----- [locks_handler/0x93] before decrypt_bytes")
+    local raw_data = string.sub(param, 2, string.len(param))
+    -- print("----- [locks_handler/0x93] param = "..param)
+    print("----- [locks_handler/0x93] raw_data = "..raw_data)
+    print("----- [locks_handler/0x93] raw_key = "..raw_key)
+    local msg = security.decrypt_bytes(raw_data, raw_key, opts)
+    print("----- [locks_handler/0x93] after decrypt_bytes, msg = "..msg)
 
-    local op_code = string.byte(payload, 1)
-    seq_num = string.byte(payload, 2)
-    local payload_data = string.sub(payload, 3, string.len(payload))
-    local func_id = string.byte(payload_data, 1) ..
-        "." ..
-        string.byte(payload_data, 2) .. "." .. ((string.byte(payload_data, 3) << 8) + (string.byte(payload_data, 4)))
+    local op_code = string.byte(msg, 1)
+    serial_num = (string.byte(msg, 4) << 8) + string.byte(msg, 5)
+    local text = string.sub(msg, 6, string.len(msg))
+
+    local seq_num = string.byte(text, 3)
+    local payload = string.sub(text, 4, string.len(text))
+
+
+    local func_id = string.byte(payload, 1).."." ..string.byte(payload, 2) .. "." .. ((string.byte(payload, 3) << 8) + (string.byte(payload, 4)))
     print("---------- func_id = " .. func_id)
+    local func_val_length = string.byte(payload, 5)
+    print("---------- func_val_length = " .. func_val_length)
 
     if func_id == "13.41.85" then
       -- device:emit_event(Lock.lock("unlocked"))
@@ -117,6 +145,7 @@ local function locks_handler(driver, device, value, zb_rx)
       end
     end
   end
+  print("----- [locks_handler] exit")
 end
 
 local aqara_locks_handler = {
