@@ -43,3 +43,6 @@ preferences:
     explicit: true
   - preferenceId: stse.lightFadeOutTimeInSec
     explicit: true
+metadata:
+  mnmn: SmartThingsCommunity
+  vid: 20b24f84-b87c-3c35-9606-1a2371d3085f

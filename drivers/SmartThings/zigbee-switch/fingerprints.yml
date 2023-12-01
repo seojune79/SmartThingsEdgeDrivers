@@ -75,7 +75,6 @@ zigbeeManufacturer:
     manufacturer: LUMI
     model: lumi.dimmer.rcbac1
     deviceProfileName: aqara-led-rgbw
-    # deviceProfileName: aqara-led-temperature
   # VIMAR
   - id: "Vimar/xx592-2-way-smart-switch"
     deviceLabel: Vimar 2-way Smart Switch

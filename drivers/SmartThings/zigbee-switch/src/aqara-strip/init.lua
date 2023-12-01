@@ -35,21 +35,6 @@ local is_aqara_products = function(opts, driver, device, ...)
   return device:get_manufacturer() == FINGERPRINTS.mfr and device:get_model() == FINGERPRINTS.model
 end
 
-local function isRGBW_MODE_bak(device)
-  print("----- [isRGBW_MODE] entry")
-  local ret = true
-  if device.profile.components[LAMP2_COMP] ~= nil then
-    ret = false
-  end
-  print("----- [isRGBW_MODE] exit")
-  if ret then
-    print("----- [isRGBW] ret value = true")
-  else
-    print("----- [isRGBW] ret value = false")
-  end
-  return ret
-end
-
 local function isRGBW_MODE(device)
   local lastMode = device:get_latest_state(MODE_COMP, capabilities.mode.ID, capabilities.mode.mode.NAME) or 0
   local ret = false
@@ -130,56 +115,6 @@ local function set_color_handler(driver, device, cmd)
   device:set_field(TARGET_SAT, nil)
   device.thread:call_with_delay(2, query_device(device))
 end
-
--- local huesat_timer_callback = function(driver, device, cmd)
---   return function()
---     local hue = device:get_field(TARGET_HUE)
---     local sat = device:get_field(TARGET_SAT)
---     hue = hue ~= nil and hue or device:get_latest_state("main", capabilities.colorControl.ID, capabilities.colorControl.hue.NAME)
---     sat = sat ~= nil and sat or device:get_latest_state("main", capabilities.colorControl.ID, capabilities.colorControl.saturation.NAME)
---     cmd.args = {
---       color = {
---         hue = hue,
---         saturation = sat
---       }
---     }
---     set_color_handler(driver, device, cmd)
---   end
--- end
-
--- local function set_hue_sat_helper(driver, device, cmd, hue, sat)
---   local huesat_timer = device:get_field(HUESAT_TIMER)
---   if huesat_timer ~= nil then
---     device.thread:cancel_timer(huesat_timer)
---     device:set_field(HUESAT_TIMER, nil)
---   end
---   if hue ~= nil and sat ~= nil then
---     cmd.args = {
---       color = {
---         hue = hue,
---         saturation = sat
---       }
---     }
---     set_color_handler(driver, device, cmd)
---   else
---     if hue ~= nil then
---       device:set_field(TARGET_HUE, hue)
---     elseif sat ~= nil then
---       device:set_field(TARGET_SAT, sat)
---     end
---     device:set_field(HUESAT_TIMER, device.thread:call_with_delay(0.2, huesat_timer_callback(driver, device, cmd)))
---   end
--- end
-
--- local function set_hue_handler(driver, device, cmd)
---   print("----- [set_hue_handler]")
---   set_hue_sat_helper(driver, device, cmd, cmd.args.hue, device:get_field(TARGET_SAT))
--- end
-
--- local function set_saturation_handler(driver, device, cmd)
---   print("----- [set_saturation_handler]")
---   set_hue_sat_helper(driver, device, cmd, device:get_field(TARGET_HUE), cmd.args.saturation)
--- end
 
 local function onoff_handler(driver, device, value, zb_rx)
   print("----- [onoff_handler] entry")
@@ -339,6 +274,17 @@ local function do_configure(driver, device)
   device:send(device_management.build_bind_request(device, OnOff.ID, driver.environment_info.hub_zigbee_eui))
 end
 
+local function change_plugin_mode(device, value)
+  local mode = 1
+  local profile_name = "aqara-led-rgbw"
+  if value == COLOR_TEMP_MODE then
+    mode = 2
+    profile_name = "aqara-led-temperature"
+  end
+  device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[mode]))
+  device:try_update_metadata({ profile = profile_name })
+end
+
 local function op_mode_handler(driver, device, value)
   print(string.format("----- [op_mode_handler] entry"))
   local current_mode = value.value
@@ -347,38 +293,9 @@ local function op_mode_handler(driver, device, value)
     print(string.format("----- [op_mode_handler] before init"))
     device:set_field(MODE_STATUS, "init", {persist = true})
     if current_mode == COLOR_TEMP_MODE then
-      device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[2]))
-      device:try_update_metadata({ profile = "aqara-led-temperature" })
-      -- device:send(cluster_base.write_manufacturer_specific_attribute(device,
-      --   PRI_CLU, OP_MODE_ATTR, MFG_CODE, data_types.Uint32, COLOR_TEMP_MODE))
+      change_plugin_mode(device, COLOR_TEMP_MODE)
     else
       device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[1]))
-      -- do_refresh(driver, device)
-    end
-  elseif device:get_field(MODE_STATUS) == "init" then -- init
-    device:set_field(MODE_STATUS, "change", {persist = true})
-    print(string.format("----- [op_mode_handler] after init"))
-    local sub_mode = COLOR_TEMP_MODE
-    if current_mode == COLOR_TEMP_MODE then sub_mode = RGBW_MODE end
-    device:send(cluster_base.write_manufacturer_specific_attribute(device,
-      PRI_CLU, SUB_MODE_ATTR, MFG_CODE, data_types.Uint32, sub_mode))
-  end
-  print(string.format("----- [op_mode_handler] exit"))
-end
-
-local function op_mode_handler_temp(driver, device, value)
-  print(string.format("----- [op_mode_handler] entry"))
-  local current_mode = value.value
-  print(string.format("----- [op_mode_handler] current_mode = %d",current_mode))
-  if not device:get_field(MODE_STATUS) then -- before init
-    print(string.format("----- [op_mode_handler] before init"))
-    device:set_field(MODE_STATUS, "init", {persist = true})
-    if current_mode == RGBW_MODE then
-      device:send(cluster_base.write_manufacturer_specific_attribute(device,
-        PRI_CLU, OP_MODE_ATTR, MFG_CODE, data_types.Uint32, RGBW_MODE))
-    else
-      device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[2]))
-      do_refresh(driver, device)
     end
   elseif device:get_field(MODE_STATUS) == "init" then -- init
     device:set_field(MODE_STATUS, "change", {persist = true})
@@ -397,11 +314,9 @@ local function sub_mode_handler(driver, device, value)
   local sub_mode = value.value
   print(string.format("----- [sub_mode_handler] sub_mode = %d", sub_mode))
   if sub_mode == RGBW_MODE then -- new mode = dual color temperature
-    device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[2]))
-    device:try_update_metadata({ profile = "aqara-led-temperature" })
+    change_plugin_mode(device, COLOR_TEMP_MODE)
   else
-    device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[1]))
-    device:try_update_metadata({ profile = "aqara-led-rgbw" })
+    change_plugin_mode(device, RGBW_MODE)
   end
 end
 
@@ -413,9 +328,7 @@ local aqara_lightstrip_driver_handler = {
       [capabilities.switch.commands.off.NAME] = switch_off_handler
     },
     [capabilities.colorControl.ID] = {
-      [capabilities.colorControl.commands.setColor.NAME] = set_color_handler,
-      -- [capabilities.colorControl.commands.setHue.NAME] = set_hue_handler,
-      -- [capabilities.colorControl.commands.setSaturation.NAME] = set_saturation_handler
+      [capabilities.colorControl.commands.setColor.NAME] = set_color_handler
     },
     [capabilities.mode.ID] = {
       [capabilities.mode.commands.setMode.NAME] = set_mode_handler
