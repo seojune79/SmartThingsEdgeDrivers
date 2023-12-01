@@ -4,7 +4,6 @@ local capabilities = require "st.capabilities"
 local data_types = require "st.zigbee.data_types"
 local utils = require "st.utils"
 local switch_defaults = require "st.zigbee.defaults.switch_defaults"
-local discovery = require "aqara-strip/discovery"
 local device_management = require "st.zigbee.device_management"
 local OnOff = clusters.OnOff
 local ColorControl = clusters.ColorControl
@@ -19,6 +18,7 @@ local SUB_MODE_ATTR = 0x050F
 local MAIN_COMP = "main"
 local LAMP1_COMP = "lamp1"
 local LAMP2_COMP = "lamp2"
+local MODE_COMP = "mode"
 local CURRENT_X = "current_x_value" -- y value from xyY color space
 local CURRENT_Y = "current_y_value" -- x value from xyY color space
 local Y_TRISTIMULUS_VALUE = "y_tristimulus_value" -- Y tristimulus value which is used to convert color xyY -> RGB -> HSV
@@ -35,8 +35,23 @@ local is_aqara_products = function(opts, driver, device, ...)
   return device:get_manufacturer() == FINGERPRINTS.mfr and device:get_model() == FINGERPRINTS.model
 end
 
+local function isRGBW_MODE_bak(device)
+  print("----- [isRGBW_MODE] entry")
+  local ret = true
+  if device.profile.components[LAMP2_COMP] ~= nil then
+    ret = false
+  end
+  print("----- [isRGBW_MODE] exit")
+  if ret then
+    print("----- [isRGBW] ret value = true")
+  else
+    print("----- [isRGBW] ret value = false")
+  end
+  return ret
+end
+
 local function isRGBW_MODE(device)
-  local lastMode = device:get_latest_state("main", capabilities.mode.ID, capabilities.mode.mode.NAME) or 0
+  local lastMode = device:get_latest_state(MODE_COMP, capabilities.mode.ID, capabilities.mode.mode.NAME) or 0
   local ret = false
   if lastMode == SUPPORTED_MODES[1] then ret = true end
   return ret
@@ -60,7 +75,7 @@ local function switch_on_handler(driver, device, cmd)
   if cmd.component == "main" then
     print("----- [switch_on_handler] main")
     device:send(OnOff.commands.On(device):to_endpoint(1))
-    if isRGBW_MODE(device) == false then
+    if not isRGBW_MODE(device) then
       print("----- [switch_on_handler] main + color temp")
       device:send(OnOff.commands.On(device):to_endpoint(2))
     end
@@ -79,7 +94,7 @@ local function switch_off_handler(driver, device, cmd)
   if cmd.component == MAIN_COMP then
     print("----- [switch_off_handler] main")
     device:send(OnOff.commands.Off(device):to_endpoint(1))
-    if isRGBW_MODE(device) == false then
+    if not isRGBW_MODE(device) then
       print("----- [switch_off_handler] main + color temp")
       device:send(OnOff.commands.Off(device):to_endpoint(2))
     end
@@ -177,7 +192,10 @@ local function onoff_handler(driver, device, value, zb_rx)
   if zb_rx.address_header.src_endpoint.value == 1 then
     print("----- [onoff_handler] src endpoint = 1")
     device:emit_component_event(main_comp, evt)
-    device:emit_component_event(lamp1_comp, evt)
+    if not isRGBW_MODE(device) then
+      print("----- [onoff_handler/src endpoint = 1] COLOR TEMP Mode")
+      device:emit_component_event(lamp1_comp, evt)
+    end
   else
     print("----- [onoff_handler] src endpoint = 2")
     device:emit_component_event(lamp2_comp, evt)
@@ -248,13 +266,16 @@ end
 
 local function component_to_endpoint(device, component_id)
   local endpoint = 1
-  if component_id == "lamp2" then endpoint = 2 end
+  if component_id == LAMP2_COMP then endpoint = 2 end
   return endpoint
 end
 
 local function endpoint_to_component(device, ep)
-  local component = "lamp1"
-  if ep == 2 then component = "lamp2" end
+  local component = MAIN_COMP
+  if not isRGBW_MODE(device) then
+    component = LAMP1_COMP
+  end
+  if ep == 2 then component = LAMP2_COMP end
   return component
 end
 
@@ -264,7 +285,7 @@ local function device_init(driver, device)
 end
 
 local function device_added(driver, device)
-  device:emit_event(capabilities.mode.supportedModes(SUPPORTED_MODES, {visibility = {displayed = false}}))
+  device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.supportedModes(SUPPORTED_MODES, {visibility = {displayed = false}}))
   -- Set private attribute
   device:send(cluster_base.write_manufacturer_specific_attribute(device,
     PRI_CLU, PRI_ATTR, MFG_CODE, data_types.Uint8, 1))
@@ -326,10 +347,37 @@ local function op_mode_handler(driver, device, value)
     print(string.format("----- [op_mode_handler] before init"))
     device:set_field(MODE_STATUS, "init", {persist = true})
     if current_mode == COLOR_TEMP_MODE then
-      device:send(cluster_base.write_manufacturer_specific_attribute(device,
-        PRI_CLU, OP_MODE_ATTR, MFG_CODE, data_types.Uint32, COLOR_TEMP_MODE))
+      device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[2]))
+      device:try_update_metadata({ profile = "aqara-led-temperature" })
+      -- device:send(cluster_base.write_manufacturer_specific_attribute(device,
+      --   PRI_CLU, OP_MODE_ATTR, MFG_CODE, data_types.Uint32, COLOR_TEMP_MODE))
     else
-      device:emit_event(capabilities.mode.mode(SUPPORTED_MODES[1]))
+      device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[1]))
+      -- do_refresh(driver, device)
+    end
+  elseif device:get_field(MODE_STATUS) == "init" then -- init
+    device:set_field(MODE_STATUS, "change", {persist = true})
+    print(string.format("----- [op_mode_handler] after init"))
+    local sub_mode = COLOR_TEMP_MODE
+    if current_mode == COLOR_TEMP_MODE then sub_mode = RGBW_MODE end
+    device:send(cluster_base.write_manufacturer_specific_attribute(device,
+      PRI_CLU, SUB_MODE_ATTR, MFG_CODE, data_types.Uint32, sub_mode))
+  end
+  print(string.format("----- [op_mode_handler] exit"))
+end
+
+local function op_mode_handler_temp(driver, device, value)
+  print(string.format("----- [op_mode_handler] entry"))
+  local current_mode = value.value
+  print(string.format("----- [op_mode_handler] current_mode = %d",current_mode))
+  if not device:get_field(MODE_STATUS) then -- before init
+    print(string.format("----- [op_mode_handler] before init"))
+    device:set_field(MODE_STATUS, "init", {persist = true})
+    if current_mode == RGBW_MODE then
+      device:send(cluster_base.write_manufacturer_specific_attribute(device,
+        PRI_CLU, OP_MODE_ATTR, MFG_CODE, data_types.Uint32, RGBW_MODE))
+    else
+      device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[2]))
       do_refresh(driver, device)
     end
   elseif device:get_field(MODE_STATUS) == "init" then -- init
@@ -349,17 +397,16 @@ local function sub_mode_handler(driver, device, value)
   local sub_mode = value.value
   print(string.format("----- [sub_mode_handler] sub_mode = %d", sub_mode))
   if sub_mode == RGBW_MODE then -- new mode = dual color temperature
-    device:emit_event(capabilities.mode.mode(SUPPORTED_MODES[2]))
+    device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[2]))
     device:try_update_metadata({ profile = "aqara-led-temperature" })
   else
-    device:emit_event(capabilities.mode.mode(SUPPORTED_MODES[1]))
+    device:emit_component_event(device.profile.components[MODE_COMP], capabilities.mode.mode(SUPPORTED_MODES[1]))
     device:try_update_metadata({ profile = "aqara-led-rgbw" })
   end
 end
 
 local aqara_lightstrip_driver_handler = {
   NAME = "Aqara Lightstrip Driver Handler",
-  discovery = discovery.handle_discovery,
   capability_handlers = {
     [capabilities.switch.ID] = {
       [capabilities.switch.commands.on.NAME] = switch_on_handler,

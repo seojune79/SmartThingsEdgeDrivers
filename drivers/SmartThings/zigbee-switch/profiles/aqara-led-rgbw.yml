@@ -4,7 +4,11 @@ components:
   capabilities:
   - id: switch
     version: 1
-  - id: mode
+  - id: switchLevel
+    version: 1
+  - id: colorTemperature
+    version: 1
+  - id: colorControl
     version: 1
   - id: refresh
     version: 1
@@ -12,15 +16,9 @@ components:
     version: 1
   categories:
   - name: Light
-- id: lamp1
+- id: mode
   capabilities:
-  - id: switch
-    version: 1
-  - id: switchLevel
-    version: 1
-  - id: colorTemperature
-    version: 1
-  - id: colorControl
+  - id: mode
     version: 1
   categories:
   - name: Light
@@ -31,4 +29,3 @@ preferences:
     explicit: true
   - preferenceId: stse.lightFadeOutTimeInSec
     explicit: true
-

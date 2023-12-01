@@ -4,8 +4,6 @@ components:
   capabilities:
   - id: switch
     version: 1
-  - id: mode
-    version: 1
   - id: refresh
     version: 1
   - id: firmwareUpdate
@@ -32,6 +30,12 @@ components:
     version: 1
   categories:
   - name: Light
+- id: mode
+  capabilities:
+  - id: mode
+    version: 1
+  categories:
+  - name: Light
 preferences:
   - preferenceId: stse.restorePowerState
     explicit: true
@@ -39,4 +43,3 @@ preferences:
     explicit: true
   - preferenceId: stse.lightFadeOutTimeInSec
     explicit: true
-
