@@ -116,7 +116,7 @@ local function locks_handler(driver, device, value, zb_rx)
     serial_num = (string.byte(msg, 3) << 8) + string.byte(msg, 4)
     local text = string.sub(msg, 5, string.len(msg))
 
-    local seq_num = string.byte(text, 3)
+    seq_num = string.byte(text, 3)
     local payload = string.sub(text, 4, string.len(text))
 
 
@@ -157,6 +157,7 @@ local function locks_handler(driver, device, value, zb_rx)
       end
     end
   end
+  print("----- [lock_handler] serial_num = "..serial_num.." / seq_num = "..seq_num)
   print("----- [locks_handler] exit")
 end
 
