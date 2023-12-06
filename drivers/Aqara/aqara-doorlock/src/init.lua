@@ -147,10 +147,15 @@ local function locks_handler(driver, device, value, zb_rx)
       else
         device:emit_event(Lock.lock("locked"))
       end
-    elseif func_id == "8.0.2223" then
+    elseif func_id == "8.0.2223" then -- firmware version
       -- local value = string.sub(payload, 5, string.len(payload))
-      local value = string.sub(payload, 6, 5+func_val_length)
-      print("----- [8.0.2223] = "..value)
+      local version = string.sub(payload, 6, 5+func_val_length)
+      print("----- [8.0.2223] = "..version)
+      local current_ver = device:get_latest_state("main", capabilities.firmwareUpdate.ID, capabilities.firmwareUpdate.currentVersion.NAME) or 0
+      print("----- [8.0.2223] current ver = "..current_ver)
+      device:emit_event(capabilities.firmwareUpdate.currentVersion({value = version}))
+      local new_ver = device:get_latest_state("main", capabilities.firmwareUpdate.ID, capabilities.firmwareUpdate.currentVersion.NAME) or 0
+      print("----- [8.0.2223] new ver = "..new_ver)
     elseif func_id == "13.56.85" then
       local value = (string.byte(payload, 6) << 24) + (string.byte(payload, 7) << 16) + (string.byte(payload, 8) << 8) + string.byte(payload, 9)
       print("----- [13.56.85] = "..value)
