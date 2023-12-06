@@ -14,6 +14,19 @@ local MFG_CODE = 0x115F
 local serial_num = 0
 local seq_num = 0
 
+-- local function dump(str)
+--   return (str:gsub('.', function (c)
+--       return string.format('%02X', c)
+--   end))
+-- end
+
+local function dump(str)
+  return (str:gsub('.', function (c)
+    return string.format('%02X', string.byte(c))
+  end))
+end
+
+
 local function my_secret_data_handler(driver, device, secret_info)
   -- At time of writing this returns nothind beyond "secret_type = aqara"
   print("----- [my_secret_data_handler] entry")
@@ -46,6 +59,7 @@ local function locks_handler(driver, device, value, zb_rx)
   print("----- [locks_handler] entry")
   local param = value.value
   local command = string.sub(param, 0, 1)
+  print("----- [locks_handler/test] param = "..dump(param))
 
   if command == "\x3E" then
     -- recv lock_pub_key
@@ -135,7 +149,7 @@ local function locks_handler(driver, device, value, zb_rx)
       end
     elseif func_id == "8.0.2223" then
       -- local value = string.sub(payload, 5, string.len(payload))
-      local value = string.sub(payload, 6, func_val_length)
+      local value = string.sub(payload, 6, 5+func_val_length)
       print("----- [8.0.2223] = "..value)
     elseif func_id == "13.56.85" then
       local value = (string.byte(payload, 6) << 24) + (string.byte(payload, 7) << 16) + (string.byte(payload, 8) << 8) + string.byte(payload, 9)
@@ -161,6 +175,35 @@ local function locks_handler(driver, device, value, zb_rx)
   print("----- [locks_handler] exit")
 end
 
+local function unlock_cmd_handler(driver, device, command)
+  local payload = "\x04"..string.char(0xFF & 17)..string.char(0xFF & (85 >> 8))..string.char(0xFF & (85))..string.char(0xFF & 1)..string.char(0xFF & 1)
+  print("----- [unlock_cmd_handler] payload = "..dump(payload))
+  seq_num = seq_num + 1
+  print("----- [unlock_cmd_handler] seq_num = "..seq_num)
+  -- local text = "\x00"..string.char(0xFF & 2)..string.char(0xFF & seq_num)..string.char(0xFF & string.len(payload))..payload
+  local text = "\x00"..string.char(0xFF & 2)..string.char(0xFF & seq_num)..payload
+  print("----- [unlock_cmd_handler] text = "..dump(text))
+  serial_num = serial_num + 1
+  print("----- [unlock_cmd_handler] serial_num = "..serial_num)
+  local raw_data = "\x5B"..string.char(0xFF & string.len(text))..string.char(0xFF & (serial_num >> 8))..string.char(0xFF & (serial_num))..text
+  print("----- [unlock_cmd_handler] raw_data = "..dump(raw_data))
+
+  local shared_key = device:get_field("sharedKey")
+  local opts = { cipher = "aes256-ecb", padding = false }
+  local raw_key = base64.decode(shared_key)
+  raw_data = raw_data.."\x00\x00\x00"
+  print("----- [unlock_cmd_handler] raw_data + 0x00 * 3ea = "..dump(raw_data))
+  local result = security.encrypt_bytes(raw_data, raw_key, opts)
+  print("----- [unlock_cmd_handler] result = encrypt(raw_data) = "..dump(result))
+  -- local en_data = base64.encode(result)
+  -- print("----- [unlock_cmd_handler] base64.encode(result) = "..dump(en_data))
+  -- local msg = string.char(0xFF & 0x93)..en_data
+  local msg = string.char(0xFF & 0x93)..result
+  print("----- [unlock_cmd_handler] msg = "..dump(msg))
+  device:send(cluster_base.write_manufacturer_specific_attribute(device,
+      PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, msg))
+end
+
 local aqara_locks_handler = {
   NAME = "Aqara Doorlock K100",
   supported_capabilities = {
@@ -173,6 +216,11 @@ local aqara_locks_handler = {
       [PRI_CLU] = {
         [PRI_ATTR] = locks_handler
       }
+    }
+  },
+  capability_handlers = {
+    [capabilities.lock.ID] = {
+      [capabilities.lock.commands.unlock.NAME] = unlock_cmd_handler
     }
   },
   lifecycle_handlers = {
