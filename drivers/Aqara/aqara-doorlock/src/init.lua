@@ -21,17 +21,16 @@ local seq_num = 0
 -- end
 
 local function dump(str)
-  return (str:gsub('.', function (c)
+  return (str:gsub('.', function(c)
     return string.format('%02X', string.byte(c))
   end))
 end
-
 
 local function my_secret_data_handler(driver, device, secret_info)
   -- At time of writing this returns nothind beyond "secret_type = aqara"
   print("----- [my_secret_data_handler] entry")
   local shared_key = secret_info.shared_key
-  local cloud_public_key = secret_info.cloud_public_key  
+  local cloud_public_key = secret_info.cloud_public_key
 
   device:set_field("sharedKey", shared_key, { persist = true })
   device:set_field("cloudPubKey", cloud_public_key, { persist = true })
@@ -43,7 +42,7 @@ local function my_secret_data_handler(driver, device, secret_info)
     local raw_data = base64.decode(cloud_public_key)
     -- send cloud_pub_key
     device:send(cluster_base.write_manufacturer_specific_attribute(device,
-      PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, "\x3E"..raw_data))
+      PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, "\x3E" .. raw_data))
   else
     print("----- [my_secret_data_handler] cloud_pub_key is nil")
   end
@@ -55,11 +54,19 @@ local function device_added(self, device)
   device:emit_event(Lock.lock("locked"))
 end
 
+local function toValue(payload, start, length)
+  local ret = 0
+  for i = start, start + length - 1 do
+    ret = (ret << 8) + string.byte(payload, i)
+  end
+  return ret
+end
+
 local function locks_handler(driver, device, value, zb_rx)
   print("----- [locks_handler] entry")
   local param = value.value
   local command = string.sub(param, 0, 1)
-  print("----- [locks_handler/test] param = "..dump(param))
+  print("----- [locks_handler/test] param = " .. dump(param))
 
   if command == "\x3E" then
     -- recv lock_pub_key
@@ -73,100 +80,96 @@ local function locks_handler(driver, device, value, zb_rx)
     if res then
       print(res)
     end
-  elseif command == "\x93\x99" then
-    print("----- [locks_handler] recv: 0x93")
-    local shared_key = device:get_field("sharedKey")
-
-    print("----- [locks_handler] recv: 0x93")
-    local opts = { cipher = "aes256-ecb", padding = false }
-    print("----- [locks_handler/0x93] before base64.decode")
-    print(string.format("----- [locks_handler/0x93] shared_key = %s", shared_key))
-    local raw_key = base64.decode(shared_key)
-    print(string.format("----- [locks_handler/0x93] raw_key = %s", raw_key))
-    print("----- [locks_handler/0x93] before decrypt_bytes")
-    local raw_data = string.sub(param, 2, string.len(param))
-    print("----- [locks_handler/0x93] raw_data = "..raw_data)
-    print("----- [locks_handler/0x93] raw_key = "..raw_key)
-    local msg = security.decrypt_bytes(raw_data, raw_key, opts)
-    print("----- [locks_handler/0x93] after decrypt_bytes, msg = "..msg)
-
-    local op_code = string.byte(msg, 1)
-    serial_num = (string.byte(msg, 4) << 8) + string.byte(msg, 5)
-    local text = string.sub(msg, 6, string.len(msg))
-
-    local seq_num = string.byte(text, 3)
-    local payload = string.sub(text, 4, string.len(text))
-
-
-    local func_id = string.byte(payload, 1).."." ..string.byte(payload, 2) .. "." .. ((string.byte(payload, 3) << 8) + (string.byte(payload, 4)))
-    print("---------- func_id = " .. func_id)
-    local func_val_length = string.byte(payload, 5)
-    print("---------- func_val_length = " .. func_val_length)
-
-    if func_id == "13.41.85" then
-      -- device:emit_event(Lock.lock("unlocked"))
-    elseif func_id == "13.31.85" then
-      if string.byte(5) == 0 then
-        device:emit_event(Lock.lock("unlocked"))
-      else
-        device:emit_event(Lock.lock("locked"))
-      end
-    end
   elseif command == "\x93" then
     print("----- [locks_handler] recv: 0x93")
-
     local shared_key = device:get_field("sharedKey")
     local opts = { cipher = "aes256-ecb", padding = false }
     local raw_key = base64.decode(shared_key)
     local raw_data = string.sub(param, 2, string.len(param))
     local msg = security.decrypt_bytes(raw_data, raw_key, opts)
-    -- print(string.format("----- [locks_handler/0x93] shared_key = %s", shared_key))
-    -- print(string.format("----- [locks_handler/0x93] raw_key = %s", raw_key))
-    -- print("----- [locks_handler/0x93] before decrypt_bytes")
-    print("----- [locks_handler/0x93] raw_data = "..raw_data)
-    print("----- [locks_handler/0x93] after decrypt_bytes, msg = "..msg)
-
-    -- local op_code = string.byte(msg, 1) -- 0x5b
-    serial_num = (string.byte(msg, 3) << 8) + string.byte(msg, 4)
+    print("----- [locks_handler/0x93] raw_data = " .. raw_data)
+    print("----- [locks_handler/0x93] after decrypt_bytes, msg = " .. msg)
+    -- serial_num = (string.byte(msg, 3) << 8) + string.byte(msg, 4)
+    serial_num = toValue(msg, 3, 2)
     local text = string.sub(msg, 5, string.len(msg))
-
     seq_num = string.byte(text, 3)
     local payload = string.sub(text, 4, string.len(text))
 
-
-    local func_id = string.byte(payload, 1).."." ..string.byte(payload, 2) .. "." .. ((string.byte(payload, 3) << 8) + (string.byte(payload, 4)))
+    -- local func_id = string.byte(payload, 1).."." ..string.byte(payload, 2) .. "." .. ((string.byte(payload, 3) << 8) + (string.byte(payload, 4)))
+    local func_idA = toValue(payload, 1, 1)
+    local func_idB = toValue(payload, 2, 1)
+    local func_idC = toValue(payload, 3, 2)
+    local func_id = func_idA .. "." .. func_idB .. "." .. func_idC
     print("---------- func_id = " .. func_id)
     local func_val_length = string.byte(payload, 5)
     print("---------- func_val_length = " .. func_val_length)
 
-    if func_id == "13.41.85" then
-      -- device:emit_event(Lock.lock("unlocked"))
-    elseif func_id == "13.31.85" then
-      if string.byte(5) == 0 then
-        device:emit_event(Lock.lock("unlocked"))
+    if func_id == "13.41.85" then -- 실내에서 사용자가 오픈
+      local value = toValue(payload, 6, 4)
+      print("----- [13.41.85] push open = " .. value)
+    elseif func_id == "13.42.85" then -- 지문 열림
+      local value = toValue(payload, 6, 4)
+      print("----- [13.42.85] fingerprint open = " .. value)
+    elseif func_id == "13.43.85" then -- 비밀번호 열림
+      local value = toValue(payload, 6, 4)
+      print("----- [13.43.85] password open = " .. value)
+    elseif func_id == "13.44.85" then -- NFC 열림
+      local value = toValue(payload, 6, 4)
+      print("----- [13.44.85] NFC open = " .. value)
+    elseif func_id == "13.45.85" then -- BLE/HomeKit 열림
+      local value = toValue(payload, 6, 4)
+      if value == 0 then
+        print("----- [13.45.85] BLE open = " .. value)
+      elseif value == 2 then
+        print("----- [13.45.85] HomeKit open = " .. value)
       else
+        print("----- [13.45.85] BLE/HomeKit open = not match")
+      end
+    elseif func_id == "13.90.85" then -- 원격 열림
+      local value = toValue(payload, 6, 4)
+      if value == 0x10000000 then
+        print("----- [13.90.85] Remote open = " .. value)
+      else
+        print("----- [13.90.85] Remote open = not match")
+      end
+    elseif func_id == "13.151.85" then -- HomeNet 열림
+      local value = toValue(payload, 6, 4)
+      if value == 0 then
+        print("----- [13.151.85] HomeNet open = " .. value)
+      else
+        print("----- [13.151.85] HomeNet open = not match")
+      end
+    elseif func_id == "13.46.85" then -- 일회용/정기적인 비밀번호 열림
+      local value = toValue(payload, 6, 4)
+      if value == 0x80020000 then
+        print("----- [13.46.85]  one-time password open = " .. value)
+      elseif value >= 0x80020001 and value <= 0x8002FFFF then
+        print("----- [13.46.85]  multi-time password open = " .. value)
+      else
+        print("----- [13.46.85] one/multi-time open = not match")
+      end
+    elseif func_id == "13.31.85" then -- 열림/잠금 상태
+      local value = toValue(payload, 6, 1)
+      print("----- [13.31.85] value = " .. value)
+      if value == 0 then
+        device:emit_event(Lock.lock("unlocked"))
+      elseif value == 1 then
         device:emit_event(Lock.lock("locked"))
       end
-    elseif func_id == "8.0.2223" then -- firmware version
-      -- local value = string.sub(payload, 5, string.len(payload))
-      local version = string.sub(payload, 6, 5+func_val_length)
-      print("----- [8.0.2223] = "..version)
-      local current_ver = device:get_latest_state("main", capabilities.firmwareUpdate.ID, capabilities.firmwareUpdate.currentVersion.NAME) or 0
-      print("----- [8.0.2223] current ver = "..current_ver)
-      device:emit_event(capabilities.firmwareUpdate.currentVersion({value = version}))
-      local new_ver = device:get_latest_state("main", capabilities.firmwareUpdate.ID, capabilities.firmwareUpdate.currentVersion.NAME) or 0
-      print("----- [8.0.2223] new ver = "..new_ver)
-    elseif func_id == "13.56.85" then
-      local value = (string.byte(payload, 6) << 24) + (string.byte(payload, 7) << 16) + (string.byte(payload, 8) << 8) + string.byte(payload, 9)
-      print("----- [13.56.85] = "..value)
-      device:emit_event(Battery.battery(value))
-    elseif func_id == "13.55.85" then
-      local value = (string.byte(payload, 6) << 24) + (string.byte(payload, 7) << 16) + (string.byte(payload, 8) << 8) + string.byte(payload, 9)
-      print("----- [13.56.85] = "..value)
-      -- device:emit_event(Battery.battery(value))
+    elseif func_id == "13.33.85" then -- 잠금 방지 상태
+      local value = toValue(payload, 6, 1)
+      print("----- [13.33.85] value = " .. value)
+      if value == 0 then
+        -- unlock
+      elseif value == 1 then
+        -- lock
+      end
+    elseif func_id == "13.17.85" then -- 문 이벤트
+      local value = toValue(payload, 6, 1)
+      print("----- [13.17.85] value = " .. value)
     elseif func_id == "13.88.85" then
       local value = string.byte(payload, 6)
-      print("----- [13.88.85] = "..value)
+      print("----- [13.88.85] = " .. value)
       if value == 0x4 then
         device:emit_event(Lock.lock("locked"))
       elseif value == 0x6 then
@@ -174,43 +177,89 @@ local function locks_handler(driver, device, value, zb_rx)
       elseif value == 0x8 then
         device:emit_event(Lock.lock("not fully locked"))
       end
+    elseif func_id == "13.54.85" then -- 외출모드
+      local value = toValue(payload, 6, 4)
+      print("----- [13.54.85] value = "..value)
+    elseif func_id == "13.49.85" then -- 재택모드에서 실내 문 열림
+      local value = toValue(payload, 6, 4)
+      print("----- [13.49.85] value = "..value)
+    elseif func_id == "13.18.85" then -- 야외에서 문을 여는 방법
+      local value = toValue(payload, 6, 4)
+      print("----- [13.18.85] value = "..value)
+    elseif func_id == "13.32.85" then -- 특이사항
+      local value = toValue(payload, 6, 4)
+      print("----- [13.32.85] value = "..value)
+    elseif func_id == "8.0.2264" then -- 도어락 로컬 로그
+      local log = string.sub(payload, 6, 5 + func_val_length)
+      print("----- [8.0.2264] log = "..string.format("%s", log))
+    elseif func_id == "8.0.2007" then -- 허트비트
+      local value = toValue(payload, 6, 1)
+      print("----- [8.0.2007] log = "..value)
+    elseif func_id == "13.55.85" then -- 배터리 잔량(전압)
+      -- local value = (string.byte(payload, 6) << 24) + (string.byte(payload, 7) << 16) + (string.byte(payload, 8) << 8) + string.byte(payload, 9)
+      local value = toValue(payload, 6, 4)
+      print("----- [13.56.85] = " .. value)
+      -- device:emit_event(Battery.battery(value))
+    elseif func_id == "13.56.85" then -- 배터리 잔량(%)
+      -- local value = (string.byte(payload, /6) << 24) + (string.byte(payload, 7) << 16) + (string.byte(payload, 8) << 8) + string.byte(payload, 9)
+      local value = toValue(payload, 6, 4)
+      print("----- [13.56.85] = " .. value)
+      device:emit_event(Battery.battery(value))
+    elseif func_id == "13.89.85" then -- 배터리 부족 슬롯
+      local value = toValue(payload, 6, 1)
+      print("----- [13.89.85] = low power slot " .. value)
+    elseif func_id == "3.19.85" then -- 방전된 배터리 슬롯
+      local value = toValue(payload, 6, 1)
+      print("----- [3.19.85] = power out slot " .. value)
+    elseif func_id == "8.0.2223" then -- firmware version
+      -- local value = string.sub(payload, 5, string.len(payload))
+      local version = string.sub(payload, 6, 5 + func_val_length)
+      print("----- [8.0.2223] = " .. version)
+      local current_ver = device:get_latest_state("main", capabilities.firmwareUpdate.ID,
+        capabilities.firmwareUpdate.currentVersion.NAME) or 0
+      print("----- [8.0.2223] current ver = " .. current_ver)
+      device:emit_event(capabilities.firmwareUpdate.currentVersion({ value = version }))
+      local new_ver = device:get_latest_state("main", capabilities.firmwareUpdate.ID,
+        capabilities.firmwareUpdate.currentVersion.NAME) or 0
+      print("----- [8.0.2223] new ver = " .. new_ver)
     end
   end
-  print("----- [lock_handler] serial_num = "..serial_num.." / seq_num = "..seq_num)
+  print("----- [lock_handler] serial_num = " .. serial_num .. " / seq_num = " .. seq_num)
   print("----- [locks_handler] exit")
 end
 
 local function toHex(value, length)
   local ret = string.char(0xFF & value)
   for i = length, 2, -1 do
-    ret = string.char(0xFF & (value >> 8*(i-1)))..ret
+    ret = string.char(0xFF & (value >> 8 * (i - 1))) .. ret
   end
   return ret
 end
 
+
 local function send_msg(device, funcA, funcB, funcC, length, value)
-  local payload = toHex(funcA, 1)..toHex(funcB, 1)..toHex(funcC, 2)..toHex(length, 1)..toHex(value, length)
-  print("----- [send_msg] payload = "..dump(payload))
+  local payload = toHex(funcA, 1) .. toHex(funcB, 1) .. toHex(funcC, 2) .. toHex(length, 1) .. toHex(value, length)
+  print("----- [send_msg] payload = " .. dump(payload))
   seq_num = seq_num + 1
-  print("----- [send_msg] seq_num = "..seq_num)
-  local text = "\x00\x02"..toHex(seq_num, 1)..payload
-  print("----- [send_msg] text = "..dump(text))
+  print("----- [send_msg] seq_num = " .. seq_num)
+  local text = "\x00\x02" .. toHex(seq_num, 1) .. payload
+  print("----- [send_msg] text = " .. dump(text))
   serial_num = serial_num + 1
-  print("----- [send_msg] serial_num = "..serial_num)
-  local raw_data = "\x5B"..toHex(string.len(text), 1)..toHex(serial_num, 2)..text
-  print("----- [send_msg] raw_data = "..dump(raw_data))
-  for i=1, 4-(string.len(raw_data)%4) do
-    raw_data = raw_data.."\x00"
+  print("----- [send_msg] serial_num = " .. serial_num)
+  local raw_data = "\x5B" .. toHex(string.len(text), 1) .. toHex(serial_num, 2) .. text
+  print("----- [send_msg] raw_data = " .. dump(raw_data))
+  for i = 1, 4 - (string.len(raw_data) % 4) do
+    raw_data = raw_data .. "\x00"
   end
-  print("----- [send_msg] raw_data + 0x00 ... = "..dump(raw_data))
+  print("----- [send_msg] raw_data + 0x00 ... = " .. dump(raw_data))
 
   local shared_key = device:get_field("sharedKey")
   local opts = { cipher = "aes256-ecb", padding = false }
   local raw_key = base64.decode(shared_key)
   local result = security.encrypt_bytes(raw_data, raw_key, opts)
-  print("----- [send_msg] result = encrypt(raw_data) = "..dump(result))
-  local msg = "\x93"..result
-  print("----- [send_msg] msg = "..dump(msg))
+  print("----- [send_msg] result = encrypt(raw_data) = " .. dump(result))
+  local msg = "\x93" .. result
+  print("----- [send_msg] msg = " .. dump(msg))
   device:send(cluster_base.write_manufacturer_specific_attribute(device,
     PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, msg))
 end
