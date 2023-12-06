@@ -175,33 +175,43 @@ local function locks_handler(driver, device, value, zb_rx)
   print("----- [locks_handler] exit")
 end
 
-local function unlock_cmd_handler(driver, device, command)
-  local payload = "\x04"..string.char(0xFF & 17)..string.char(0xFF & (85 >> 8))..string.char(0xFF & (85))..string.char(0xFF & 1)..string.char(0xFF & 1)
-  print("----- [unlock_cmd_handler] payload = "..dump(payload))
+local function toHex(value, length)
+  local ret = string.char(0xFF & value)
+  for i = length, 2, -1 do
+    ret = string.char(0xFF & (value >> 8*(i-1)))..ret
+  end
+  return ret
+end
+
+local function send_msg(device, funcA, funcB, funcC, length, value)
+  local payload = toHex(funcA, 1)..toHex(funcB, 1)..toHex(funcC, 2)..toHex(length, 1)..toHex(value, length)
+  print("----- [send_msg] payload = "..dump(payload))
   seq_num = seq_num + 1
-  print("----- [unlock_cmd_handler] seq_num = "..seq_num)
-  -- local text = "\x00"..string.char(0xFF & 2)..string.char(0xFF & seq_num)..string.char(0xFF & string.len(payload))..payload
-  local text = "\x00"..string.char(0xFF & 2)..string.char(0xFF & seq_num)..payload
-  print("----- [unlock_cmd_handler] text = "..dump(text))
+  print("----- [send_msg] seq_num = "..seq_num)
+  local text = "\x00\x02"..toHex(seq_num, 1)..payload
+  print("----- [send_msg] text = "..dump(text))
   serial_num = serial_num + 1
-  print("----- [unlock_cmd_handler] serial_num = "..serial_num)
-  local raw_data = "\x5B"..string.char(0xFF & string.len(text))..string.char(0xFF & (serial_num >> 8))..string.char(0xFF & (serial_num))..text
-  print("----- [unlock_cmd_handler] raw_data = "..dump(raw_data))
+  print("----- [send_msg] serial_num = "..serial_num)
+  local raw_data = "\x5B"..toHex(string.len(text), 1)..toHex(serial_num, 2)..text
+  print("----- [send_msg] raw_data = "..dump(raw_data))
+  for i=1, 4-(string.len(raw_data)%4) do
+    raw_data = raw_data.."\x00"
+  end
+  print("----- [send_msg] raw_data + 0x00 ... = "..dump(raw_data))
 
   local shared_key = device:get_field("sharedKey")
   local opts = { cipher = "aes256-ecb", padding = false }
   local raw_key = base64.decode(shared_key)
-  raw_data = raw_data.."\x00\x00\x00"
-  print("----- [unlock_cmd_handler] raw_data + 0x00 * 3ea = "..dump(raw_data))
   local result = security.encrypt_bytes(raw_data, raw_key, opts)
-  print("----- [unlock_cmd_handler] result = encrypt(raw_data) = "..dump(result))
-  -- local en_data = base64.encode(result)
-  -- print("----- [unlock_cmd_handler] base64.encode(result) = "..dump(en_data))
-  -- local msg = string.char(0xFF & 0x93)..en_data
-  local msg = string.char(0xFF & 0x93)..result
-  print("----- [unlock_cmd_handler] msg = "..dump(msg))
+  print("----- [send_msg] result = encrypt(raw_data) = "..dump(result))
+  local msg = "\x93"..result
+  print("----- [send_msg] msg = "..dump(msg))
   device:send(cluster_base.write_manufacturer_specific_attribute(device,
-      PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, msg))
+    PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, msg))
+end
+
+local function unlock_cmd_handler(driver, device, command)
+  send_msg(device, 4, 17, 85, 1, 1)
 end
 
 local aqara_locks_handler = {
