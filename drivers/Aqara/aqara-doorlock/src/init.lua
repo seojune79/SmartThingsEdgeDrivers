@@ -14,12 +14,6 @@ local MFG_CODE = 0x115F
 local serial_num = 0
 local seq_num = 0
 
--- local function dump(str)
---   return (str:gsub('.', function (c)
---       return string.format('%02X', c)
---   end))
--- end
-
 local function dump(str)
   return (str:gsub('.', function(c)
     return string.format('%02X', string.byte(c))
@@ -87,9 +81,6 @@ local function locks_handler(driver, device, value, zb_rx)
     local raw_key = base64.decode(shared_key)
     local raw_data = string.sub(param, 2, string.len(param))
     local msg = security.decrypt_bytes(raw_data, raw_key, opts)
-    print("----- [locks_handler/0x93] raw_data = " .. raw_data)
-    print("----- [locks_handler/0x93] after decrypt_bytes, msg = " .. msg)
-    -- serial_num = (string.byte(msg, 3) << 8) + string.byte(msg, 4)
     serial_num = toValue(msg, 3, 2)
     local text = string.sub(msg, 5, string.len(msg))
     seq_num = string.byte(text, 3)
@@ -100,128 +91,41 @@ local function locks_handler(driver, device, value, zb_rx)
     local func_idB = toValue(payload, 2, 1)
     local func_idC = toValue(payload, 3, 2)
     local func_id = func_idA .. "." .. func_idB .. "." .. func_idC
-    print("---------- func_id = " .. func_id)
     local func_val_length = string.byte(payload, 5)
-    print("---------- func_val_length = " .. func_val_length)
+    print("---------- func_id = " .. func_id.." / length = "..func_val_length)
 
-    if func_id == "13.41.85" then -- 실내에서 사용자가 오픈
-      local value = toValue(payload, 6, 4)
-      print("----- [13.41.85] push open = " .. value)
-    elseif func_id == "13.42.85" then -- 지문 열림
-      local value = toValue(payload, 6, 4)
-      print("----- [13.42.85] fingerprint open = " .. value)
-    elseif func_id == "13.43.85" then -- 비밀번호 열림
-      local value = toValue(payload, 6, 4)
-      print("----- [13.43.85] password open = " .. value)
-    elseif func_id == "13.44.85" then -- NFC 열림
-      local value = toValue(payload, 6, 4)
-      print("----- [13.44.85] NFC open = " .. value)
-    elseif func_id == "13.45.85" then -- BLE/HomeKit 열림
-      local value = toValue(payload, 6, 4)
-      if value == 0 then
-        print("----- [13.45.85] BLE open = " .. value)
-      elseif value == 2 then
-        print("----- [13.45.85] HomeKit open = " .. value)
-      else
-        print("----- [13.45.85] BLE/HomeKit open = not match")
-      end
-    elseif func_id == "13.90.85" then -- 원격 열림
-      local value = toValue(payload, 6, 4)
-      if value == 0x10000000 then
-        print("----- [13.90.85] Remote open = " .. value)
-      else
-        print("----- [13.90.85] Remote open = not match")
-      end
-    elseif func_id == "13.151.85" then -- HomeNet 열림
-      local value = toValue(payload, 6, 4)
-      if value == 0 then
-        print("----- [13.151.85] HomeNet open = " .. value)
-      else
-        print("----- [13.151.85] HomeNet open = not match")
-      end
-    elseif func_id == "13.46.85" then -- 일회용/정기적인 비밀번호 열림
-      local value = toValue(payload, 6, 4)
-      if value == 0x80020000 then
-        print("----- [13.46.85]  one-time password open = " .. value)
-      elseif value >= 0x80020001 and value <= 0x8002FFFF then
-        print("----- [13.46.85]  multi-time password open = " .. value)
-      else
-        print("----- [13.46.85] one/multi-time open = not match")
-      end
-    elseif func_id == "13.31.85" then -- 열림/잠금 상태
-      local value = toValue(payload, 6, 1)
-      print("----- [13.31.85] value = " .. value)
-      if value == 0 then
-        device:emit_event(Lock.lock("unlocked"))
-      elseif value == 1 then
-        device:emit_event(Lock.lock("locked"))
-      end
-    elseif func_id == "13.33.85" then -- 잠금 방지 상태
-      local value = toValue(payload, 6, 1)
-      print("----- [13.33.85] value = " .. value)
-      if value == 0 then
-        -- unlock
-      elseif value == 1 then
-        -- lock
-      end
-    elseif func_id == "13.17.85" then -- 문 이벤트
-      local value = toValue(payload, 6, 1)
-      print("----- [13.17.85] value = " .. value)
-    elseif func_id == "13.88.85" then
-      local value = string.byte(payload, 6)
-      print("----- [13.88.85] = " .. value)
-      if value == 0x4 then
-        device:emit_event(Lock.lock("locked"))
-      elseif value == 0x6 then
-        device:emit_event(Lock.lock("unlocked"))
-      elseif value == 0x8 then
-        device:emit_event(Lock.lock("not fully locked"))
-      end
-    elseif func_id == "13.54.85" then -- 외출모드
-      local value = toValue(payload, 6, 4)
-      print("----- [13.54.85] value = "..value)
-    elseif func_id == "13.49.85" then -- 재택모드에서 실내 문 열림
-      local value = toValue(payload, 6, 4)
-      print("----- [13.49.85] value = "..value)
-    elseif func_id == "13.18.85" then -- 야외에서 문을 여는 방법
-      local value = toValue(payload, 6, 4)
-      print("----- [13.18.85] value = "..value)
-    elseif func_id == "13.32.85" then -- 특이사항
-      local value = toValue(payload, 6, 4)
-      print("----- [13.32.85] value = "..value)
-    elseif func_id == "8.0.2264" then -- 도어락 로컬 로그
+    if func_id == "8.0.2264" then -- 도어락 로컬 로그
       local log = string.sub(payload, 6, 5 + func_val_length)
       print("----- [8.0.2264] log = "..string.format("%s", log))
-    elseif func_id == "8.0.2007" then -- 허트비트
-      local value = toValue(payload, 6, 1)
-      print("----- [8.0.2007] log = "..value)
-    elseif func_id == "13.55.85" then -- 배터리 잔량(전압)
-      -- local value = (string.byte(payload, 6) << 24) + (string.byte(payload, 7) << 16) + (string.byte(payload, 8) << 8) + string.byte(payload, 9)
-      local value = toValue(payload, 6, 4)
-      print("----- [13.56.85] = " .. value)
-      -- device:emit_event(Battery.battery(value))
-    elseif func_id == "13.56.85" then -- 배터리 잔량(%)
-      -- local value = (string.byte(payload, /6) << 24) + (string.byte(payload, 7) << 16) + (string.byte(payload, 8) << 8) + string.byte(payload, 9)
-      local value = toValue(payload, 6, 4)
-      print("----- [13.56.85] = " .. value)
-      device:emit_event(Battery.battery(value))
-    elseif func_id == "13.89.85" then -- 배터리 부족 슬롯
-      local value = toValue(payload, 6, 1)
-      print("----- [13.89.85] = low power slot " .. value)
-    elseif func_id == "3.19.85" then -- 방전된 배터리 슬롯
-      local value = toValue(payload, 6, 1)
-      print("----- [3.19.85] = power out slot " .. value)
     elseif func_id == "8.0.2223" then -- firmware version
-      -- local value = string.sub(payload, 5, string.len(payload))
       local version = string.sub(payload, 6, 5 + func_val_length)
-      print("----- [8.0.2223] = " .. version)
-      local current_ver = device:get_latest_state("main", capabilities.firmwareUpdate.ID,
-        capabilities.firmwareUpdate.currentVersion.NAME) or 0
-      print("----- [8.0.2223] current ver = " .. current_ver)
       device:emit_event(capabilities.firmwareUpdate.currentVersion({ value = version }))
       local new_ver = device:get_latest_state("main", capabilities.firmwareUpdate.ID,
         capabilities.firmwareUpdate.currentVersion.NAME) or 0
       print("----- [8.0.2223] new ver = " .. new_ver)
+    else -- value가 숫자타입인 경우
+      local value = toValue(payload, 6, func_val_length)
+      print("----- ["..func_id.."] = "..value)
+
+      if func_id == "13.31.85" then -- 열림/잠금 상태
+        if value == 0 then
+          device:emit_event(Lock.lock("unlocked"))
+        elseif value == 1 then
+          device:emit_event(Lock.lock("locked"))
+        end
+      elseif func_id == "13.88.85" then
+        if value == 0x4 then
+          device:emit_event(Lock.lock("locked"))
+        elseif value == 0x6 then
+          device:emit_event(Lock.lock("unlocked"))
+        end
+      elseif func_id == "13.17.85" then -- 문 이벤트
+        if value == 2 then
+          device:emit_event(Lock.lock("not fully locked"))
+        end
+      elseif func_id == "13.56.85" then -- 배터리 잔량(%)
+        device:emit_event(Battery.battery(value))
+      end
     end
   end
   print("----- [lock_handler] serial_num = " .. serial_num .. " / seq_num = " .. seq_num)
@@ -264,8 +168,8 @@ local function send_msg(device, funcA, funcB, funcC, length, value)
     PRI_CLU, PRI_ATTR, MFG_CODE, data_types.OctetString, msg))
 end
 
-local function unlock_cmd_handler(driver, device, command)
-  send_msg(device, 4, 17, 85, 1, 1)
+local function unlock_cmd_handler(driver, device, cmd)
+  send_msg(device, 4, 17, 85, 1, 1) -- remote unlock by automation style
 end
 
 local aqara_locks_handler = {
