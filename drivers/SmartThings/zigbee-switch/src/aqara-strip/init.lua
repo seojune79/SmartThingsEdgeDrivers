@@ -251,7 +251,7 @@ end
 
 local function device_info_changed(driver, device, event, args)
   if device.profile.id ~= args.old_st_store.profile.id then
-    -- do_refresh(driver, device)
+    do_refresh(driver, device)
     set_restore_powerState(device)
     set_light_fadeInTimeState(device)
     set_light_fadeOutTimeState(device)
