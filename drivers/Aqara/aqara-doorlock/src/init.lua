@@ -56,6 +56,10 @@ local function toValue(payload, start, length)
   return ret
 end
 
+local function test_handler(driver, device, value, zb_rx)
+  print("----- [test_handler] "..value.value)
+end
+
 local function locks_handler(driver, device, value, zb_rx)
   print("----- [locks_handler] entry")
   local param = value.value
@@ -66,9 +70,9 @@ local function locks_handler(driver, device, value, zb_rx)
     -- recv lock_pub_key
     print("----- [locks_handler] recv: 0x3E")
     local locks_pub_key = string.sub(param, 2, string.len(param))
-    local mn_id = "0AE0"
+    local mn_id = "Id3A"
     local setup_id = "006"
-    local product_id = "337dbf83-af55-449c-824b-54ffcbb3afb6"
+    local product_id = ""
     local res, err = security.get_aqara_secret(device.zigbee_eui, locks_pub_key, "AqaraDoorlock K100", mn_id, setup_id,
       product_id)
     if res then
@@ -170,6 +174,10 @@ end
 
 local function unlock_cmd_handler(driver, device, cmd)
   send_msg(device, 4, 17, 85, 1, 1) -- remote unlock by automation style
+  print("----- [unlock_cmd_handler] entry")
+  device:send(cluster_base.read_manufacturer_specific_attribute(device,
+    PRI_CLU, 0x010D, MFG_CODE))
+  print("----- [unlock_cmd_handler] exit")
 end
 
 local aqara_locks_handler = {
@@ -182,7 +190,8 @@ local aqara_locks_handler = {
   zigbee_handlers = {
     attr = {
       [PRI_CLU] = {
-        [PRI_ATTR] = locks_handler
+        [PRI_ATTR] = locks_handler,
+        [0x010D] = test_handler
       }
     }
   },
