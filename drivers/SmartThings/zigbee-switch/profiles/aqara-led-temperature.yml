@@ -4,6 +4,10 @@ components:
   capabilities:
   - id: switch
     version: 1
+  - id: switchLevel
+    version: 1
+  - id: colorTemperature
+    version: 1
   - id: refresh
     version: 1
   - id: firmwareUpdate
@@ -43,6 +47,4 @@ preferences:
     explicit: true
   - preferenceId: stse.lightFadeOutTimeInSec
     explicit: true
-metadata:
-  mnmn: SmartThingsCommunity
-  vid: 20b24f84-b87c-3c35-9606-1a2371d3085f
+

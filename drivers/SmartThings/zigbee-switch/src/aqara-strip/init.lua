@@ -30,6 +30,8 @@ local RGBW_MODE = 0x0003
 local COLOR_TEMP_MODE = 0x0001
 local SUPPORTED_MODES = { "rgbw", "dualColorTemperature" }
 local FINGERPRINTS = { mfr = "LUMI", model = "lumi.dimmer.rcbac1" }
+local dimming_rate = 20
+local CONVERSION_CONSTANT = 1000000
 
 local is_aqara_products = function(opts, driver, device, ...)
   return device:get_manufacturer() == FINGERPRINTS.mfr and device:get_model() == FINGERPRINTS.model
@@ -93,6 +95,34 @@ local function switch_off_handler(driver, device, cmd)
   print("----- [switch_off_handler] entry")
 end
 
+local function set_level_handler(driver, device, cmd)
+  local level = math.floor(cmd.args.level / 100.0 * 254)
+  if cmd.component == MAIN_COMP then
+    device:send(Level.commands.MoveToLevelWithOnOff(device, level, dimming_rate):to_endpoint(1))
+    if not isRGBW_MODE(device) then
+      device:send(Level.commands.MoveToLevelWithOnOff(device, level, dimming_rate):to_endpoint(2))
+    end
+  elseif cmd.component == LAMP1_COMP then
+    device:send(Level.commands.MoveToLevelWithOnOff(device, level, dimming_rate):to_endpoint(1))
+  elseif cmd.component == LAMP2_COMP then
+    device:send(Level.commands.MoveToLevelWithOnOff(device, level, dimming_rate):to_endpoint(2))
+  end
+end
+
+local function set_color_temp_handler(driver, device, cmd)
+  local temp_in_mired = utils.round(CONVERSION_CONSTANT / cmd.args.temperature)
+  if cmd.component == MAIN_COMP then
+    device:send(ColorControl.commands.MoveToColorTemperature(device, temp_in_mired, dimming_rate):to_endpoint(1))
+    if not isRGBW_MODE(device) then
+      device:send(ColorControl.commands.MoveToColorTemperature(device, temp_in_mired, dimming_rate):to_endpoint(2))
+    end
+  elseif cmd.component == LAMP1_COMP then
+    device:send(ColorControl.commands.MoveToColorTemperature(device, temp_in_mired, dimming_rate):to_endpoint(1))
+  elseif cmd.component == LAMP2_COMP then
+    device:send(ColorControl.commands.MoveToColorTemperature(device, temp_in_mired, dimming_rate):to_endpoint(2))
+  end
+end
+
 local function set_color_handler(driver, device, cmd)
   print("----- [set_color_handler]")
   -- Cancel the hue/sat timer if it's running, since setColor includes both hue and saturation
@@ -136,6 +166,40 @@ local function onoff_handler(driver, device, value, zb_rx)
     device:emit_component_event(lamp2_comp, evt)
   end
   print("----- [onoff_handler] exit")
+end
+
+local function current_level_handler(driver, device, value, zb_rx)
+  local main_comp = device.profile.components[MAIN_COMP]
+  local lamp1_comp = device.profile.components[LAMP1_COMP]
+  local lamp2_comp = device.profile.components[LAMP2_COMP]
+  local level = math.floor((value.value / 254.0 * 100) + 0.5)
+  local evt = capabilities.switchLevel.level(level)
+
+  if zb_rx.address_header.src_endpoint.value == 1 then
+    device:emit_component_event(main_comp, evt)
+    if not isRGBW_MODE(device) then
+      device:emit_component_event(lamp1_comp, evt)
+    end
+  else
+    device:emit_component_event(lamp2_comp, evt)
+  end
+end
+
+local function current_color_temp_mireds_handler(driver, device, value, zb_rx)
+  local main_comp = device.profile.components[MAIN_COMP]
+  local lamp1_comp = device.profile.components[LAMP1_COMP]
+  local lamp2_comp = device.profile.components[LAMP2_COMP]
+  local mired = utils.round(CONVERSION_CONSTANT / value.value)
+  local evt = capabilities.colorTemperature.colorTemperature(mired)
+
+  if zb_rx.address_header.src_endpoint.value == 1 then
+    device:emit_component_event(main_comp, evt)
+    if not isRGBW_MODE(device) then
+      device:emit_component_event(lamp1_comp, evt)
+    end
+  else
+    device:emit_component_event(lamp2_comp, evt)
+  end
 end
 
 local function current_x_attr_handler(driver, device, value, zb_rx)
@@ -327,6 +391,12 @@ local aqara_lightstrip_driver_handler = {
       [capabilities.switch.commands.on.NAME] = switch_on_handler,
       [capabilities.switch.commands.off.NAME] = switch_off_handler
     },
+    [capabilities.switchLevel.ID] = {
+      [capabilities.switchLevel.commands.setLevel.NAME] = set_level_handler
+    },
+    [capabilities.colorTemperature.ID] = {
+      [capabilities.colorTemperature.commands.setColorTemperature.NAME] = set_color_temp_handler,
+    },
     [capabilities.colorControl.ID] = {
       [capabilities.colorControl.commands.setColor.NAME] = set_color_handler
     },
@@ -342,7 +412,11 @@ local aqara_lightstrip_driver_handler = {
       [OnOff.ID] = {
         [OnOff.attributes.OnOff.ID] = onoff_handler
       },
+      [Level.ID] = {
+        [Level.attributes.CurrentLevel.ID] = current_level_handler
+      },
       [ColorControl.ID] = {
+        [ColorControl.attributes.ColorTemperatureMireds.ID] = current_color_temp_mireds_handler,
         [ColorControl.attributes.CurrentX.ID] = current_x_attr_handler,
         [ColorControl.attributes.CurrentY.ID] = current_y_attr_handler
       },
