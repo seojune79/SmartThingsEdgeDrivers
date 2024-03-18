@@ -3,6 +3,7 @@ local discovery = {}
 
 local fields = require "fields"
 local discovery_mdns = require "discovery_mdns"
+local multipleZonePresence = require "multipleZonePresence"
 
 local socket = require "cosock.socket"
 
@@ -49,6 +50,34 @@ function discovery.device_added(driver, device)
   set_device_field(driver, device)
   device_discovery_cache[device.device_network_id] = nil
   driver.lifecycle_handlers.init(driver, device)
+
+  multipleZonePresence.updateAttribute(driver, device)
+  local err, createdId
+  err, createdId = multipleZonePresence.createZone("zone1", "1")
+  if err then
+    print("-----[discovery.device_added] create zone1 fail = "..err)
+  else
+    print("-----[discovery.device_added] create zone1 success")
+  end
+  err, createdId = multipleZonePresence.createZone("zone2", "2")
+  if err then
+    print("-----[discovery.device_added] create zone2 fail = "..err)
+  else
+    print("-----[discovery.device_added] create zone2 success")
+  end
+  err, createdId = multipleZonePresence.createZone("zone3", "3")
+  if err then
+    print("-----[discovery.device_added] create zone3 fail = "..err)
+  else
+    print("-----[discovery.device_added] create zone3 success")
+  end
+  err, createdId = multipleZonePresence.createZone("zone4", "4")
+  if err then
+    print("-----[discovery.device_added] create zone4 fail = "..err)
+  else
+    print("-----[discovery.device_added] create zone4 success")
+  end
+  multipleZonePresence.updateAttribute(driver, device)
 end
 
 function discovery.find_ip_table(driver)

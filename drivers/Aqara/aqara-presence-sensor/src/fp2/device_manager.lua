@@ -3,6 +3,7 @@ local json = require "st.json"
 local fields = require "fields"
 
 local capabilities = require "st.capabilities"
+local multipleZonePresence = require "multipleZonePresence"
 
 local PresenceSensor = capabilities.presenceSensor
 local MovementSensor = capabilities["stse.movementSensor"]
@@ -14,31 +15,19 @@ local device_manager = {}
 device_manager.__index = device_manager
 
 function device_manager.handle_status(driver, device, status)
-    local MAIN = "main"
-    local AREA1 = "area1"
-    local AREA2 = "area2"
-    local AREA3 = "area3"
-    local AREA4 = "area4"
-    local comps = {
-        main = device.profile.components[MAIN],
-        area1 = device.profile.components[AREA1],
-        area2 = device.profile.components[AREA2],
-        area3 = device.profile.components[AREA3],
-        area4 = device.profile.components[AREA4]
-    }
     if not status then
         log.error("device_manager.handle_status : status is nil")
         return
     end
 
     if not status["13.21.85"] == false then
-        print("----- [13.21.8]")
+        print("----- [13.21.85]")
         local area_id = math.floor(status["13.21.85"] / 256)
         local event_id = status["13.21.85"] % 256
         local event_action = "noMovement"
 
         local no_movement = function()
-            device:emit_component_event(comps[string.format("area%d", area_id)], MovementSensor.movement("noMovement"))
+            device:emit_event(MovementSensor.movement("noMovement"))
         end
         device:set_field(MOVEMENT_TIMER[area_id], device.thread:call_with_delay(MOVEMENT_TIME, no_movement))
 
@@ -53,68 +42,75 @@ function device_manager.handle_status(driver, device, status)
         end
 
         if event_action ~= "noMovement" then
-            device:emit_component_event(comps[string.format("area%d", area_id)], MovementSensor.movement(event_action))
+            device:emit_event(MovementSensor.movement(event_action))
         end
 
-        if event_id == 0x04 then
-            local target_comp
-            if area_id == 1 then
-                target_comp = comps[AREA1]
-            elseif area_id == 2 then
-                target_comp = comps[AREA2]
-            elseif area_id == 3 then
-                target_comp = comps[AREA3]
-            elseif area_id == 4 then
-                target_comp = comps[AREA4]
-            end
-            device:emit_component_event(target_comp, PresenceSensor.presence("present"))
-        elseif event_id == 0x08 then
-            local target_comp
-            if area_id == 1 then
-                target_comp = comps[AREA1]
-            elseif area_id == 2 then
-                target_comp = comps[AREA2]
-            elseif area_id == 3 then
-                target_comp = comps[AREA3]
-            elseif area_id == 4 then
-                target_comp = comps[AREA4]
-            end
-            device:emit_component_event(target_comp, PresenceSensor.presence("not present"))
-        end
+        -- if event_id == 0x04 then
+        --     multipleZonePresence.changeState(tostring(area_id), multipleZonePresence.present)
+        -- elseif event_id == 0x08 then
+        --     multipleZonePresence.changeState(tostring(area_id), multipleZonePresence.notPresent)
+        -- end
     end
 
-    -- if not status["3.51.85"] == false then
-    --     local event_id = "not present"
-    --     if status["3.51.85"] == 1 then event_id = "present" end
-    --     device:emit_component_event(comps[MAIN], PresenceSensor.presence(event_id))
-    -- end
+    if not status["3.51.85"] == false then
+        local event_id = "not present"
+        device:emit_event(PresenceSensor.presence(event_id))
+    end
 
     if not status["3.1.85"] == false then
         print("----- [3.1.85]")
-        local event_id = "not present"
-        if tonumber(status["3.1.85"]) == 1 then event_id = "present" end
+        local event_id = multipleZonePresence.notPresent
+        if tonumber(status["3.1.85"]) == 1 then event_id = multipleZonePresence.present end
         -- device:emit_component_event(comps[AREA1], PresenceSensor.presence(event_id))
+        local err, changedId = multipleZonePresence.changeState("1", event_id)
+        if err then
+            print("----- [3.1.85] FAIL = "..err)
+        else
+            print("----- [3.1.85] SUCCESS = "..event_id)
+        end
+        multipleZonePresence.updateAttribute(driver, device)
     end
 
     if not status["3.2.85"] == false then
         print("----- [3.2.85]")
-        local event_id = "not present"
-        if tonumber(status["3.2.85"]) == 1 then event_id = "present" end
+        local event_id = multipleZonePresence.notPresent
+        if tonumber(status["3.2.85"]) == 1 then event_id = multipleZonePresence.present end
         -- device:emit_component_event(comps[AREA2], PresenceSensor.presence(event_id))
+        local err, changedId = multipleZonePresence.changeState("2", event_id)
+        if err then
+            print("----- [3.2.85] FAIL = "..err)
+        else
+            print("----- [3.2.85] SUCCESS = "..event_id)
+        end
+        multipleZonePresence.updateAttribute(driver, device)
     end
 
     if not status["3.3.85"] == false then
         print("----- [3.3.85]")
-        local event_id = "not present"
-        if tonumber(status["3.3.85"]) == 1 then event_id = "present" end
-        device:emit_component_event(comps[AREA3], PresenceSensor.presence(event_id))
+        local event_id = multipleZonePresence.notPresent
+        if tonumber(status["3.3.85"]) == 1 then event_id = multipleZonePresence.present end
+        -- device:emit_component_event(comps[AREA3], PresenceSensor.presence(event_id))
+        local err, changedId = multipleZonePresence.changeState("3", event_id)
+        if err then
+            print("----- [3.3.85] FAIL = "..err)
+        else
+            print("----- [3.3.85] SUCCESS = "..event_id)
+        end
+        multipleZonePresence.updateAttribute(driver, device)
     end
 
     if not status["3.4.85"] == false then
         print("----- [3.4.85]")
-        local event_id = "not present"
-        if tonumber(status["3.4.85"]) == 1 then event_id = "present" end
-        device:emit_component_event(comps[AREA4], PresenceSensor.presence(event_id))
+        local event_id = multipleZonePresence.notPresent
+        if tonumber(status["3.4.85"]) == 1 then event_id = multipleZonePresence.present end
+        -- device:emit_component_event(comps[AREA4], PresenceSensor.presence(event_id))
+        local err, changedId = multipleZonePresence.changeState("4", event_id)
+        if err then
+            print("----- [3.4.85] FAIL = "..err)
+        else
+            print("----- [3.4.85] SUCCESS = "..event_id)
+        end
+        multipleZonePresence.updateAttribute(driver, device)
     end
 
     if not status["0.4.85"] == false then
