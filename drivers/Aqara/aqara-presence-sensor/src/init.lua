@@ -2,7 +2,6 @@ local log = require "log"
 
 local capabilities = require "st.capabilities"
 local Driver = require "st.driver"
-local utils = require "st.utils"
 
 local discovery = require "discovery"
 local fields = require "fields"
@@ -38,36 +37,7 @@ local function status_update(driver, device)
         device:offline()
       end
     else
-      if not resp["0.4.85"] == false then
-        device:emit_event(capabilities.illuminanceMeasurement.illuminance(tonumber(resp["0.4.85"])))
-      end
-
-      local event_action = "not present"
-      if not resp["3.51.85"] == false and resp["3.51.85"] == "1" then event_action = "present" end
-      -- device:emit_component_event(device.profile.components["main"], PresenceSensor.presence(event_action))
-      device:emit_event(PresenceSensor.presence(event_action))
-
-      event_action = multipleZonePresence.notPresent
-      if not resp["3.1.85"] == false and resp["3.1.85"] == "1" then event_action = multipleZonePresence.present end
-      multipleZonePresence.changeState("1", event_action)
-      print("----- [status_update] 3.1.85 = "..event_action)
-
-      event_action = multipleZonePresence.notPresent
-      if not resp["3.2.85"] == false and resp["3.2.85"] == "1" then event_action = multipleZonePresence.present end
-      multipleZonePresence.changeState("2", event_action)
-      print("----- [status_update] 3.2.85 = "..event_action)
-
-      event_action = multipleZonePresence.notPresent
-      if not resp["3.3.85"] == false and resp["3.3.85"] == "1" then event_action = multipleZonePresence.present end
-      multipleZonePresence.changeState("3", event_action)
-      print("----- [status_update] 3.3.85 = "..event_action)
-
-      event_action = multipleZonePresence.notPresent
-      if not resp["3.4.85"] == false and resp["3.4.85"] == "1" then event_action = multipleZonePresence.present end
-      multipleZonePresence.changeState("4", event_action)
-      print("----- [status_update] 3.4.85 = "..event_action)
-
-      device:emit_event(MovementSensor.movement("noMovement"))
+      driver.device_manager.handle_status(driver, device, resp, false)
     end
   end
   print("----- [status_update] exit")
@@ -220,9 +190,6 @@ local function device_init(driver, device)
   update_connection(driver, device, device_ip, device_info)
 
   -- status_update(driver, device)
-  multipleZonePresence.zoneInfoTable = utils.deep_copy(device:get_latest_state("main", multipleZonePresence.id, "zoneState", {}))
-  multipleZonePresence.updateAttribute(driver, device)
-
   do_refresh(driver, device, nil)
   device:set_field(fields._INIT, true, { persist = false })
 end
