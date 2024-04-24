@@ -37,7 +37,7 @@ local function status_update(driver, device)
         device:offline()
       end
     else
-      driver.device_manager.handle_status(driver, device, resp, false)
+      driver.device_manager.handle_status(driver, device, resp)
     end
   end
   print("----- [status_update] exit")

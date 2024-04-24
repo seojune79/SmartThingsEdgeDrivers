@@ -71,14 +71,17 @@ function mzp.deleteZone(id)
 end
 
 function mzp.renameZone(id, name)
+    print("----- [renameZone] entry")
     local err, changedId = nil, nil
     local zoneInfo = mzp.findZoneById(id)
     if zoneInfo then
+        print("----- [renameZone] zoneInfo change, name = "..name.." / id = "..id)
         zoneInfo.name = name
         changedId = id
     else
         err = string.format("id %s doesn't exists", id)
     end
+    print("----- [renameZone] exit")
     return err, changedId
 end
 
@@ -97,13 +100,16 @@ end
 mzp.commands.updateZoneName = {}
 mzp.commands.updateZoneName.name = "updateZoneName"
 function mzp.commands.updateZoneName.handler(driver, device, args)
+    print("-----[updateZoneName.handler] entry")
     log.error("UPDATE_ZONE_NAME")
     local name = args.args.name
     local id = args.args.id
+    print("-----[updateZoneName.handler] name = "..tostring(name).." / id = "..tostring(id))
     log.error("NAME::: " .. tostring(name))
     log.error("ID::: " .. tostring(id))
     mzp.renameZone(id, name)
     mzp.updateAttribute(driver, device)
+    print("-----[updateZoneName.handler] exit")
 end
 
 mzp.commands.deleteZone = {}
