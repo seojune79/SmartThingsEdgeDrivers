@@ -100,16 +100,10 @@ end
 mzp.commands.updateZoneName = {}
 mzp.commands.updateZoneName.name = "updateZoneName"
 function mzp.commands.updateZoneName.handler(driver, device, args)
-    print("-----[updateZoneName.handler] entry")
-    log.error("UPDATE_ZONE_NAME")
     local name = args.args.name
     local id = args.args.id
-    print("-----[updateZoneName.handler] name = "..tostring(name).." / id = "..tostring(id))
-    log.error("NAME::: " .. tostring(name))
-    log.error("ID::: " .. tostring(id))
     mzp.renameZone(id, name)
     mzp.updateAttribute(driver, device)
-    print("-----[updateZoneName.handler] exit")
 end
 
 mzp.commands.deleteZone = {}

@@ -206,7 +206,7 @@ local lan_driver = Driver("aqara-fp2",
       [capabilities.refresh.ID] = {
         [capabilities.refresh.commands.refresh.NAME] = do_refresh,
       },
-      [multipleZonePresence.capability] = {
+      [multipleZonePresence.id] = {
         [multipleZonePresence.commands.createZone.name] = multipleZonePresence.commands.createZone.handler,
         [multipleZonePresence.commands.deleteZone.name] = multipleZonePresence.commands.deleteZone.handler,
         [multipleZonePresence.commands.updateZoneName.name] = multipleZonePresence.commands.updateZoneName.handler,
