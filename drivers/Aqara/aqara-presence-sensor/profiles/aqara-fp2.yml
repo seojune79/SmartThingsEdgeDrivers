@@ -2,6 +2,8 @@ name: aqara-fp2
 components: 
 - id: main
   capabilities:
+    - id: mode
+      version: 1
     - id: presenceSensor
       version: 1
     - id: multipleZonePresence

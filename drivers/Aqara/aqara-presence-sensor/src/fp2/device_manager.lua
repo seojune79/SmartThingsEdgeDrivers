@@ -13,6 +13,8 @@ local MOVEMENT_TIME = 5
 local device_manager = {}
 device_manager.__index = device_manager
 
+local FP2_MODES = { "ZoneDetection", "FallDetection", "SleepMonitoring" }
+
 function device_manager.presence_handler(driver, device, zone, evt_value)
     local evt_action = "not present"
     if evt_value == 1 then evt_action = "present" end
@@ -22,7 +24,7 @@ end
 function device_manager.zone_presence_handler(driver, device, zone, evt_value)
     local zoneInfo = multipleZonePresence.findZoneById(zone)
     if not zoneInfo then
-        multipleZonePresence.createZone("zone"..zone, zone)
+        multipleZonePresence.createZone("zone" .. zone, zone)
     end
     local evt_action = multipleZonePresence.notPresent
     if evt_value == 1 then evt_action = multipleZonePresence.present end
@@ -34,39 +36,55 @@ function device_manager.illuminance_handler(driver, device, zone, evt_value)
     device:emit_event(capabilities.illuminanceMeasurement.illuminance(evt_value))
 end
 
+function device_manager.work_mode_handler(driver, device, zone, evt_value)
+    local mode = 1
+    if evt_value == 0x05 then
+        mode = 2
+    elseif evt_value == 0x09 then
+        mode = 3
+    end
+    device:emit_event(capabilities.mode.mode(FP2_MODES[mode]))
+end
+
+function device_manager.init_work_mode(device)
+    device:emit_event(capabilities.mode.supportedModes(FP2_MODES, { visibility = {displayed=false}}))
+    device:emit_event(capabilities.mode.mode(FP2_MODES[1]))
+end
+
 local resource_id = {
-    ["3.51.85"] = { zone="", event_handler=device_manager.presence_handler },
-    ["3.1.85"] = { zone="1", event_handler=device_manager.zone_presence_handler },
-    ["3.2.85"] = { zone="2", event_handler=device_manager.zone_presence_handler },
-    ["3.3.85"] = { zone="3", event_handler=device_manager.zone_presence_handler },
-    ["3.4.85"] = { zone="4", event_handler=device_manager.zone_presence_handler },
-    ["3.5.85"] = { zone="5", event_handler=device_manager.zone_presence_handler },
-    ["3.6.85"] = { zone="6", event_handler=device_manager.zone_presence_handler },
-    ["3.7.85"] = { zone="7", event_handler=device_manager.zone_presence_handler },
-    ["3.8.85"] = { zone="8", event_handler=device_manager.zone_presence_handler },
-    ["3.9.85"] = { zone="9", event_handler=device_manager.zone_presence_handler },
-    ["3.10.85"] = { zone="10", event_handler=device_manager.zone_presence_handler },
-    ["3.11.85"] = { zone="11", event_handler=device_manager.zone_presence_handler },
-    ["3.12.85"] = { zone="12", event_handler=device_manager.zone_presence_handler },
-    ["3.13.85"] = { zone="13", event_handler=device_manager.zone_presence_handler },
-    ["3.14.85"] = { zone="14", event_handler=device_manager.zone_presence_handler },
-    ["3.15.85"] = { zone="15", event_handler=device_manager.zone_presence_handler },
-    ["3.16.85"] = { zone="16", event_handler=device_manager.zone_presence_handler },
-    ["3.17.85"] = { zone="17", event_handler=device_manager.zone_presence_handler },
-    ["3.18.85"] = { zone="18", event_handler=device_manager.zone_presence_handler },
-    ["3.19.85"] = { zone="19", event_handler=device_manager.zone_presence_handler },
-    ["3.20.85"] = { zone="20", event_handler=device_manager.zone_presence_handler },
-    ["3.21.85"] = { zone="21", event_handler=device_manager.zone_presence_handler },
-    ["3.22.85"] = { zone="22", event_handler=device_manager.zone_presence_handler },
-    ["3.23.85"] = { zone="23", event_handler=device_manager.zone_presence_handler },
-    ["3.24.85"] = { zone="24", event_handler=device_manager.zone_presence_handler },
-    ["3.25.85"] = { zone="25", event_handler=device_manager.zone_presence_handler },
-    ["3.26.85"] = { zone="26", event_handler=device_manager.zone_presence_handler },
-    ["3.27.85"] = { zone="27", event_handler=device_manager.zone_presence_handler },
-    ["3.28.85"] = { zone="28", event_handler=device_manager.zone_presence_handler },
-    ["3.29.85"] = { zone="29", event_handler=device_manager.zone_presence_handler },
-    ["3.30.85"] = { zone="30", event_handler=device_manager.zone_presence_handler },
-    ["0.4.85"] = { zone="", event_handler=device_manager.illuminance_handler }
+    ["3.51.85"] = { zone = "", event_handler = device_manager.presence_handler },
+    ["3.1.85"] = { zone = "1", event_handler = device_manager.zone_presence_handler },
+    ["3.2.85"] = { zone = "2", event_handler = device_manager.zone_presence_handler },
+    ["3.3.85"] = { zone = "3", event_handler = device_manager.zone_presence_handler },
+    ["3.4.85"] = { zone = "4", event_handler = device_manager.zone_presence_handler },
+    ["3.5.85"] = { zone = "5", event_handler = device_manager.zone_presence_handler },
+    ["3.6.85"] = { zone = "6", event_handler = device_manager.zone_presence_handler },
+    ["3.7.85"] = { zone = "7", event_handler = device_manager.zone_presence_handler },
+    ["3.8.85"] = { zone = "8", event_handler = device_manager.zone_presence_handler },
+    ["3.9.85"] = { zone = "9", event_handler = device_manager.zone_presence_handler },
+    ["3.10.85"] = { zone = "10", event_handler = device_manager.zone_presence_handler },
+    ["3.11.85"] = { zone = "11", event_handler = device_manager.zone_presence_handler },
+    ["3.12.85"] = { zone = "12", event_handler = device_manager.zone_presence_handler },
+    ["3.13.85"] = { zone = "13", event_handler = device_manager.zone_presence_handler },
+    ["3.14.85"] = { zone = "14", event_handler = device_manager.zone_presence_handler },
+    ["3.15.85"] = { zone = "15", event_handler = device_manager.zone_presence_handler },
+    ["3.16.85"] = { zone = "16", event_handler = device_manager.zone_presence_handler },
+    ["3.17.85"] = { zone = "17", event_handler = device_manager.zone_presence_handler },
+    ["3.18.85"] = { zone = "18", event_handler = device_manager.zone_presence_handler },
+    ["3.19.85"] = { zone = "19", event_handler = device_manager.zone_presence_handler },
+    ["3.20.85"] = { zone = "20", event_handler = device_manager.zone_presence_handler },
+    ["3.21.85"] = { zone = "21", event_handler = device_manager.zone_presence_handler },
+    ["3.22.85"] = { zone = "22", event_handler = device_manager.zone_presence_handler },
+    ["3.23.85"] = { zone = "23", event_handler = device_manager.zone_presence_handler },
+    ["3.24.85"] = { zone = "24", event_handler = device_manager.zone_presence_handler },
+    ["3.25.85"] = { zone = "25", event_handler = device_manager.zone_presence_handler },
+    ["3.26.85"] = { zone = "26", event_handler = device_manager.zone_presence_handler },
+    ["3.27.85"] = { zone = "27", event_handler = device_manager.zone_presence_handler },
+    ["3.28.85"] = { zone = "28", event_handler = device_manager.zone_presence_handler },
+    ["3.29.85"] = { zone = "29", event_handler = device_manager.zone_presence_handler },
+    ["3.30.85"] = { zone = "30", event_handler = device_manager.zone_presence_handler },
+    ["0.4.85"] = { zone = "", event_handler = device_manager.illuminance_handler },
+    ["14.49.85"] = { zone = "", event_handler = device_manager.work_mode_handler }
 }
 
 function device_manager.handle_status(driver, device, status)
@@ -80,29 +98,6 @@ function device_manager.handle_status(driver, device, status)
             resource_id[k].event_handler(driver, device, resource_id[k].zone, tonumber(status[k]))
         end
     end
-end
-
-function device_manager.handle_status2(driver, device, status, pack)
-    if not status then
-        log.error("device_manager.handle_status : status is nil")
-        return
-    end
-
-    for k, _ in pairs(status) do
-        if resource_id[k] then
-            resource_id[k].event_handler(driver, device, resource_id[k].zone, tonumber(status[k]))
-        end
-    end
-
-
-
-    for k, v in pairs(resource_id) do
-        if not status[v.id] == false then
-            v.event_handler(driver, device, v.zone, tonumber(status[v.id]))
-            if pack then goto continue end
-        end
-    end
-    ::continue::
 end
 
 function device_manager.update_status(driver, device)
