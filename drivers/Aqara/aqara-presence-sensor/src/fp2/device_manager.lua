@@ -8,6 +8,7 @@ local multipleZonePresence = require "multipleZonePresence"
 local PresenceSensor = capabilities.presenceSensor
 local MovementSensor = capabilities["stse.movementSensor"]
 
+local MOVEMENT_TIMER = "movement_timer"
 local MOVEMENT_TIME = 5
 
 local device_manager = {}
@@ -19,6 +20,33 @@ function device_manager.presence_handler(driver, device, zone, evt_value)
     local evt_action = "not present"
     if evt_value == 1 then evt_action = "present" end
     device:emit_event(PresenceSensor.presence(evt_action))
+end
+
+function device_manager.movement_handler(driver, device, zone, evt_value)
+    local val = evt_value
+
+    local no_movement = function()
+        device:emit_event(MovementSensor.movement("noMovement"))
+    end
+    device:set_field(MOVEMENT_TIMER, device.thread:call_with_delay(MOVEMENT_TIME, no_movement))
+
+    if val == 0 then
+        device:emit_event(MovementSensor.movement("enter"))
+    elseif val == 1 then
+        device:emit_event(MovementSensor.movement("leave"))
+    elseif val == 2 then
+        device:emit_event(MovementSensor.movement("enter")) -- 좌진(신규 필요)
+    elseif val == 3 then
+        device:emit_event(MovementSensor.movement("leave")) -- 우출(신규 필요)
+    elseif val == 4 then
+        device:emit_event(MovementSensor.movement("enter")) -- 우진(신규 필요)
+    elseif val == 5 then
+        device:emit_event(MovementSensor.movement("leave")) -- 좌출(신규 필요)
+    elseif val == 6 then
+        device:emit_event(MovementSensor.movement("approaching"))
+    elseif val == 7 then
+        device:emit_event(MovementSensor.movement("goingAway"))
+    end
 end
 
 function device_manager.zone_presence_handler(driver, device, zone, evt_value)
@@ -49,10 +77,31 @@ end
 function device_manager.init_work_mode(device)
     device:emit_event(capabilities.mode.supportedModes(FP2_MODES, { visibility = {displayed=false}}))
     device:emit_event(capabilities.mode.mode(FP2_MODES[1]))
+    if device:get_field(MOVEMENT_TIMER) then
+        device.thread:cancel_timer(MOVEMENT_TIMER)
+        device:set_field(MOVEMENT_TIMER, nil)
+    end
+    device:emit_event(MovementSensor.movement("noMovement"))
+end
+
+function device_manager.zone_quantities_handler(driver, device, zone, evt_value)
+    for i = 0, 29 do
+        local zonePos = tostring(i+1)
+        local zoneInfo = multipleZonePresence.findZoneById(zonePos)
+        local curStatus = 0x1 & (evt_value >> i)
+        if zoneInfo and curStatus == 0 then -- delete
+            multipleZonePresence.deleteZone(zonePos)
+        elseif not zoneInfo and curStatus == 1 then -- create
+            multipleZonePresence.createZone("zone" .. zonePos, zonePos)
+            multipleZonePresence.changeState(zonePos, multipleZonePresence.notPresent)
+        end
+    end
+    multipleZonePresence.updateAttribute(driver, device)
 end
 
 local resource_id = {
     ["3.51.85"] = { zone = "", event_handler = device_manager.presence_handler },
+    ["13.27.85"] = { zone = "", event_handler = device_manager.movement_handler },
     ["3.1.85"] = { zone = "1", event_handler = device_manager.zone_presence_handler },
     ["3.2.85"] = { zone = "2", event_handler = device_manager.zone_presence_handler },
     ["3.3.85"] = { zone = "3", event_handler = device_manager.zone_presence_handler },
@@ -84,7 +133,8 @@ local resource_id = {
     ["3.29.85"] = { zone = "29", event_handler = device_manager.zone_presence_handler },
     ["3.30.85"] = { zone = "30", event_handler = device_manager.zone_presence_handler },
     ["0.4.85"] = { zone = "", event_handler = device_manager.illuminance_handler },
-    ["14.49.85"] = { zone = "", event_handler = device_manager.work_mode_handler }
+    ["14.49.85"] = { zone = "", event_handler = device_manager.work_mode_handler },
+    ["200.2.20000"] = { zone = "", event_handler = device_manager.zone_quantities_handler }
 }
 
 function device_manager.handle_status(driver, device, status)

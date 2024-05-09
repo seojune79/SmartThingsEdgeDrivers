@@ -6,6 +6,8 @@ components:
       version: 1
     - id: presenceSensor
       version: 1
+    - id: stse.movementSensor
+      version: 1
     - id: multipleZonePresence
       version: 1
     - id: illuminanceMeasurement
