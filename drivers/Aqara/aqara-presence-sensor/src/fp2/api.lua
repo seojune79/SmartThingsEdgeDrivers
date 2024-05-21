@@ -14,7 +14,8 @@ local SSL_CONFIG = {
     protocol = "any",
     verify = "peer",
     options = "all",
-    cafile = "./selfSignedRoot.crt"
+    cafile = "./selfSignedRootByAqaraLife.crt"
+    -- cafile = "./selfSignedRoot.crt"
 }
 
 local ADDITIONAL_HEADERS = {

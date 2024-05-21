@@ -8,6 +8,7 @@ local fields = require "fields"
 
 local fp2_discovery_helper = require "fp2.discovery_helper"
 local fp2_device_manager = require "fp2.device_manager"
+local fp2_api = require "fp2.api"
 local multipleZonePresence = require "multipleZonePresence"
 local EventSource = require "lunchbox.sse.eventsource"
 
@@ -57,7 +58,11 @@ local function create_sse(driver, device, credential)
     log.error("failed to get sse_url")
   else
     log.trace(string.format("Creating SSE EventSource for %s, sse_url= %s", device.device_network_id, sse_url))
-    local eventsource = EventSource.new(sse_url, { [CREDENTIAL_KEY_HEADER] = credential }, nil)
+    -- local label = string.format("label%s", device.device_network_id)
+    local label = string.format("%s", device.device_network_id)
+    print("----- [LABEL] "..label)
+    -- local eventsource = EventSource.new(sse_url, { [CREDENTIAL_KEY_HEADER] = credential }, nil)
+    local eventsource = EventSource.new(sse_url, { [CREDENTIAL_KEY_HEADER] = credential }, fp2_api.labeled_socket_builder(label))
     -- sync
     status_update(driver, device)
     -- end of sync

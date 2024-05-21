@@ -144,6 +144,7 @@ function device_manager.handle_status(driver, device, status)
     end
 
     for k, _ in pairs(status) do
+        print("----- [device_manager.handle_status] resource id = "..k)
         if resource_id[k] then
             resource_id[k].event_handler(driver, device, resource_id[k].zone, tonumber(status[k]))
         end

@@ -243,7 +243,13 @@ end
 local function connecting_action(source)
   if not source._sock then
     if type(source._sock_builder) == "function" then
-      source._sock = source._sock_builder()
+      -- source._sock = source._sock_builder()
+      local use_ssl = false
+      if source.url.scheme == "https" then
+        use_ssl = true
+        end
+
+        source._sock = source._sock_builder(source.url.host, source.url.port, use_ssl)
     else
       source._sock, err = socket.tcp()
       if err ~= nil then return nil, err end
@@ -424,18 +430,21 @@ local state_actions = {
 function EventSource.new(url, extra_headers, sock_builder)
   local url_table = util.force_url_table(url)
 
+  local use_ssl = false
   if not url_table.port then
     if url_table.scheme == "http" then
       url_table.port = 80
     elseif url_table.scheme == "https" then
       url_table.port = 443
+      use_ssl = true
     end
   end
 
   local sock = nil
 
   if type(sock_builder) == "function" then
-    sock = sock_builder()
+    -- sock = sock_builder()
+    sock = sock_builder(url_table.host, url_table.port, use_ssl)
   end
 
   local source = setmetatable({
