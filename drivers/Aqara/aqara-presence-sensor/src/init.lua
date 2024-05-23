@@ -12,9 +12,6 @@ local fp2_api = require "fp2.api"
 local multipleZonePresence = require "multipleZonePresence"
 local EventSource = require "lunchbox.sse.eventsource"
 
-local PresenceSensor = capabilities.presenceSensor
-local MovementSensor = capabilities["stse.movementSensor"]
-
 local DEFAULT_MONITORING_INTERVAL = 300
 local CREDENTIAL_KEY_HEADER = "Authorization"
 
@@ -58,8 +55,8 @@ local function create_sse(driver, device, credential)
     log.error("failed to get sse_url")
   else
     log.trace(string.format("Creating SSE EventSource for %s, sse_url= %s", device.device_network_id, sse_url))
-    -- local label = string.format("label%s", device.device_network_id)
-    local label = string.format("%s", device.device_network_id)
+    -- local label = string.format("SSE%s", device.device_network_id)
+    local label = string.format("%s-SSE", device.device_network_id)
     print("----- [LABEL] "..label)
     -- local eventsource = EventSource.new(sse_url, { [CREDENTIAL_KEY_HEADER] = credential }, nil)
     local eventsource = EventSource.new(sse_url, { [CREDENTIAL_KEY_HEADER] = credential }, fp2_api.labeled_socket_builder(label))
@@ -199,12 +196,18 @@ local function device_init(driver, device)
   device:set_field(fields._INIT, true, { persist = false })
 end
 
+local function device_info_changed(driver, device, event, args)
+  -- no action
+  -- status_update(driver, device)
+end
+
 local lan_driver = Driver("aqara-fp2",
   {
     discovery = discovery.do_network_discovery,
     lifecycle_handlers = {
       added = discovery.device_added,
       init = device_init,
+      infoChanged = device_info_changed,
       removed = device_removed
     },
     capability_handlers = {

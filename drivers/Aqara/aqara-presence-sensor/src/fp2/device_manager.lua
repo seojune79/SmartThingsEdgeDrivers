@@ -10,6 +10,9 @@ local MovementSensor = capabilities["stse.movementSensor"]
 
 local MOVEMENT_TIMER = "movement_timer"
 local MOVEMENT_TIME = 5
+local COMP_PRESENCE = "presence"
+local COMP_ILLUMINANCE = "illuminance"
+local COMP_MODE = "mode"
 
 local device_manager = {}
 device_manager.__index = device_manager
@@ -19,33 +22,43 @@ local FP2_MODES = { "ZoneDetection", "FallDetection", "SleepMonitoring" }
 function device_manager.presence_handler(driver, device, zone, evt_value)
     local evt_action = "not present"
     if evt_value == 1 then evt_action = "present" end
-    device:emit_event(PresenceSensor.presence(evt_action))
+    -- device:emit_event(PresenceSensor.presence(evt_action))
+    device:emit_component_event(device.profile.components[COMP_PRESENCE], PresenceSensor.presence(evt_action))
 end
 
 function device_manager.movement_handler(driver, device, zone, evt_value)
     local val = evt_value
 
     local no_movement = function()
-        device:emit_event(MovementSensor.movement("noMovement"))
+        -- device:emit_event(MovementSensor.movement("noMovement"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("noMovement"))
     end
     device:set_field(MOVEMENT_TIMER, device.thread:call_with_delay(MOVEMENT_TIME, no_movement))
 
     if val == 0 then
-        device:emit_event(MovementSensor.movement("enter"))
+        -- device:emit_event(MovementSensor.movement("enter"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("enter"))
     elseif val == 1 then
-        device:emit_event(MovementSensor.movement("leave"))
+        -- device:emit_event(MovementSensor.movement("leave"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leave"))
     elseif val == 2 then
-        device:emit_event(MovementSensor.movement("enter")) -- 좌진(신규 필요)
+        -- device:emit_event(MovementSensor.movement("enter")) -- 좌진(신규 필요)
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("enter")) -- 좌진(신규 필요)
     elseif val == 3 then
-        device:emit_event(MovementSensor.movement("leave")) -- 우출(신규 필요)
+        -- device:emit_event(MovementSensor.movement("leave")) -- 우출(신규 필요)
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leave")) -- 우출(신규 필요)
     elseif val == 4 then
-        device:emit_event(MovementSensor.movement("enter")) -- 우진(신규 필요)
+        -- device:emit_event(MovementSensor.movement("enter")) -- 우진(신규 필요)
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("enter")) -- 우진(신규 필요)
     elseif val == 5 then
-        device:emit_event(MovementSensor.movement("leave")) -- 좌출(신규 필요)
+        -- device:emit_event(MovementSensor.movement("leave")) -- 좌출(신규 필요)
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leave")) -- 좌출(신규 필요)
     elseif val == 6 then
-        device:emit_event(MovementSensor.movement("approaching"))
+        -- device:emit_event(MovementSensor.movement("approaching"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("approaching"))
     elseif val == 7 then
-        device:emit_event(MovementSensor.movement("goingAway"))
+        -- device:emit_event(MovementSensor.movement("goingAway"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("goingAway"))
     end
 end
 
@@ -61,39 +74,70 @@ function device_manager.zone_presence_handler(driver, device, zone, evt_value)
 end
 
 function device_manager.illuminance_handler(driver, device, zone, evt_value)
-    device:emit_event(capabilities.illuminanceMeasurement.illuminance(evt_value))
+    -- device:emit_event(capabilities.illuminanceMeasurement.illuminance(evt_value))
+    device:emit_component_event(device.profile.components[COMP_ILLUMINANCE], capabilities.illuminanceMeasurement.illuminance(evt_value))
 end
 
 function device_manager.work_mode_handler(driver, device, zone, evt_value)
     local mode = 1
+    local profile_name = "aqara-fp2-zoneDetection"
     if evt_value == 0x05 then
         mode = 2
+        profile_name = "aqara-fp2-fallDetection"
     elseif evt_value == 0x09 then
         mode = 3
+        profile_name = "aqara-fp2-sleepMonitoring"
     end
-    device:emit_event(capabilities.mode.mode(FP2_MODES[mode]))
+    -- device:emit_event(capabilities.mode.mode(FP2_MODES[mode]))
+    print("----- [device_manager.work_mode_handler] "..profile_name)
+    device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.mode(FP2_MODES[mode]))
+    -- device:try_update_metadata({ profile = profile_name })
 end
 
 function device_manager.init_work_mode(device)
-    device:emit_event(capabilities.mode.supportedModes(FP2_MODES, { visibility = {displayed=false}}))
-    device:emit_event(capabilities.mode.mode(FP2_MODES[1]))
+    -- device:emit_event(capabilities.mode.supportedModes(FP2_MODES, { visibility = {displayed=false}}))
+    -- device:emit_event(capabilities.mode.mode(FP2_MODES[1]))
+    device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.supportedModes(FP2_MODES, { visibility = {displayed=false}}))
+    device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.mode(FP2_MODES[1]))
     if device:get_field(MOVEMENT_TIMER) then
         device.thread:cancel_timer(MOVEMENT_TIMER)
         device:set_field(MOVEMENT_TIMER, nil)
     end
-    device:emit_event(MovementSensor.movement("noMovement"))
+    -- device:emit_event(MovementSensor.movement("noMovement"))
+    device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("noMovement"))
 end
 
-function device_manager.zone_quantities_handler(driver, device, zone, evt_value)
+function device_manager.zone_quantities_handler_original(driver, device, zone, evt_value)
     for i = 0, 29 do
         local zonePos = tostring(i+1)
         local zoneInfo = multipleZonePresence.findZoneById(zonePos)
         local curStatus = 0x1 & (evt_value >> i)
+        print("----- [device_manager.zone_quantities_handler] status["..zonePos.."] = "..curStatus)
         if zoneInfo and curStatus == 0 then -- delete
             multipleZonePresence.deleteZone(zonePos)
+            print("----- [device_manager.zone_quantities_handler] status["..zonePos.."] = "..curStatus.. " / delete")
         elseif not zoneInfo and curStatus == 1 then -- create
             multipleZonePresence.createZone("zone" .. zonePos, zonePos)
             multipleZonePresence.changeState(zonePos, multipleZonePresence.notPresent)
+            print("----- [device_manager.zone_quantities_handler] status["..zonePos.."] = "..curStatus.. " / create")
+        end
+    end
+    multipleZonePresence.updateAttribute(driver, device)
+end
+
+function device_manager.zone_quantities_handler(driver, device, zone, evt_value) -- test
+    for i = 0, 29 do
+        local zonePos = tostring(i+1)
+        local zoneInfo = multipleZonePresence.findZoneById(zonePos)
+        local curStatus = 0x1 & (evt_value >> i)
+        -- print("----- [device_manager.zone_quantities_handler] status["..zonePos.."] = "..curStatus)
+        if curStatus == 0 then -- delete
+            multipleZonePresence.deleteZone(zonePos)
+            print("----- [device_manager.zone_quantities_handler] status["..zonePos.."] = "..curStatus.. " / delete")
+        elseif curStatus == 1 then -- create
+            multipleZonePresence.createZone("zone" .. zonePos, zonePos)
+            multipleZonePresence.changeState(zonePos, multipleZonePresence.notPresent)
+            print("----- [device_manager.zone_quantities_handler] status["..zonePos.."] = "..curStatus.. " / create")
         end
     end
     multipleZonePresence.updateAttribute(driver, device)

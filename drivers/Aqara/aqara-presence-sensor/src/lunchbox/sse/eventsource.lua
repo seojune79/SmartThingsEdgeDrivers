@@ -431,12 +431,15 @@ function EventSource.new(url, extra_headers, sock_builder)
   local url_table = util.force_url_table(url)
 
   local use_ssl = false
+  if url_table.scheme == "https" then
+    use_ssl = true
+  end
+  
   if not url_table.port then
     if url_table.scheme == "http" then
       url_table.port = 80
     elseif url_table.scheme == "https" then
       url_table.port = 443
-      use_ssl = true
     end
   end
 

@@ -3,6 +3,7 @@ local capabilities = require "st.capabilities"
 local json = require "st.json"
 
 local mzp = {}
+local COMP_PRESENCE = "presence"
 
 mzp.capability = capabilities["multipleZonePresence"]
 mzp.id = "multipleZonePresence"
@@ -42,6 +43,7 @@ function mzp.createZone(name, id)
     if mzp.findZoneById(id) then
         err = string.format("id %s already exists", id)
         mzp.maxZoneId = mzp.maxZoneId + 1
+        print("----- [mzp.createZone] "..err)
         return err, createdId
     end
     zoneInfo.id = id
@@ -54,6 +56,7 @@ function mzp.createZone(name, id)
     if intId and intId > mzp.maxZoneId then
         mzp.maxZoneId = intId
     end
+    print("----- [mzp.createZone] createZone")
 
     return err, createdId
 end
@@ -66,6 +69,7 @@ function mzp.deleteZone(id)
         deletedId = id
     else
         err = string.format("id %s doesn't exists", id)
+        print("----- [mzp.deleteZone] "..err)
     end
     return err, deletedId
 end
@@ -124,7 +128,10 @@ function mzp.commands.createZone.handler(driver, device, args)
 end
 
 function mzp.updateAttribute(driver, device)
-    device:emit_event(mzp.capability.zoneState({value = mzp.zoneInfoTable}, {data = { lastId = "MYID", state = "present"}}))
+    -- device:emit_event(mzp.capability.zoneState({value = mzp.zoneInfoTable}, {data = { lastId = "MYID", state = "present"}}))
+    print("----- [mzp.updateAttribute] entry")
+    device:emit_component_event(device.profile.components[COMP_PRESENCE], mzp.capability.zoneState({value = mzp.zoneInfoTable}, {data = { lastId = "MYID", state = "present"}}))
+    print("----- [mzp.updateAttribute] exit")
 end
 
 return mzp
