@@ -1,12 +1,7 @@
 local log = require "log"
-local capabilities = require "st.capabilities"
 local discovery = {}
-
 local fields = require "fields"
 local discovery_mdns = require "discovery_mdns"
-local multipleZonePresence = require "multipleZonePresence"
-local utils = require "st.utils"
-
 local socket = require "cosock.socket"
 
 -- mapping from device DNI to info needed at discovery/init time
@@ -52,12 +47,6 @@ function discovery.device_added(driver, device)
   set_device_field(driver, device)
   device_discovery_cache[device.device_network_id] = nil
   driver.lifecycle_handlers.init(driver, device)
-
-  -- fp2_device_manager.init_work_mode(device)
-  -- driver.device_manager.init_work_mode(device)
-
-  -- multipleZonePresence.zoneInfoTable = utils.deep_copy(device:get_latest_state("main", multipleZonePresence.id, "zoneState", {}))
-  -- multipleZonePresence.updateAttribute(driver, device)
 end
 
 function discovery.find_ip_table(driver)

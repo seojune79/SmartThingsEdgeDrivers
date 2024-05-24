@@ -1,11 +1,8 @@
 local log = require "log"
-
 local capabilities = require "st.capabilities"
 local Driver = require "st.driver"
-
 local discovery = require "discovery"
 local fields = require "fields"
-
 local fp2_discovery_helper = require "fp2.discovery_helper"
 local fp2_device_manager = require "fp2.device_manager"
 local fp2_api = require "fp2.api"
@@ -20,7 +17,6 @@ local function handle_sse_event(driver, device, msg)
 end
 
 local function status_update(driver, device)
-  print("----- [status_update] entry")
   local conn_info = device:get_field(fields.CONN_INFO)
   if not conn_info then
     log.warn(string.format("refresh : failed to find conn_info, dni = %s", device.device_network_id))
@@ -38,7 +34,6 @@ local function status_update(driver, device)
       driver.device_manager.handle_status(driver, device, resp)
     end
   end
-  print("----- [status_update] exit")
 end
 
 local function create_sse(driver, device, credential)
@@ -55,13 +50,10 @@ local function create_sse(driver, device, credential)
     log.error("failed to get sse_url")
   else
     log.trace(string.format("Creating SSE EventSource for %s, sse_url= %s", device.device_network_id, sse_url))
-    -- local label = string.format("SSE%s", device.device_network_id)
     local label = string.format("%s-SSE", device.device_network_id)
-    print("----- [LABEL] "..label)
-    -- local eventsource = EventSource.new(sse_url, { [CREDENTIAL_KEY_HEADER] = credential }, nil)
     local eventsource = EventSource.new(sse_url, { [CREDENTIAL_KEY_HEADER] = credential }, fp2_api.labeled_socket_builder(label))
     -- sync
-    status_update(driver, device)
+    -- status_update(driver, device) -- for test
     -- end of sync
 
     eventsource.onmessage = function(msg)
@@ -153,8 +145,8 @@ end
 local function do_refresh(driver, device, cmd)
   log.info(string.format("refresh : dni= %s", device.device_network_id))
   check_and_update_connection(driver, device)
-  driver.device_manager.init_movement(device)
   status_update(driver, device)
+  driver.device_manager.init_movement(driver, device)
 end
 
 local function device_removed(driver, device)
@@ -175,7 +167,6 @@ local function device_init(driver, device)
   end
 
   local device_dni = device.device_network_id
-
   driver.controlled_devices[device_dni] = device
 
   local device_ip = device:get_field(fields.DEVICE_IPV4)
@@ -192,14 +183,16 @@ local function device_init(driver, device)
   create_monitoring_thread(driver, device, device_info)
   update_connection(driver, device, device_ip, device_info)
 
-  -- status_update(driver, device)
   do_refresh(driver, device, nil)
   device:set_field(fields._INIT, true, { persist = false })
 end
 
 local function device_info_changed(driver, device, event, args)
+  driver.device_manager.init_movement(driver, device)
+end
+
+local function configure_handler(driver, device, event, args)
   -- no action
-  -- status_update(driver, device)
 end
 
 local lan_driver = Driver("aqara-fp2",
@@ -209,6 +202,7 @@ local lan_driver = Driver("aqara-fp2",
       added = discovery.device_added,
       init = device_init,
       infoChanged = device_info_changed,
+      doConfigure = configure_handler,
       removed = device_removed
     },
     capability_handlers = {

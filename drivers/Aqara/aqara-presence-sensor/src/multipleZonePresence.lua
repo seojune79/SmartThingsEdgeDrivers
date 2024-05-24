@@ -1,6 +1,4 @@
-local log = require "log"
 local capabilities = require "st.capabilities"
-local json = require "st.json"
 
 local mzp = {}
 local COMP_PRESENCE = "presence"
@@ -15,123 +13,115 @@ mzp.present = "present"
 mzp.notPresent = "not present"
 
 function mzp.findZoneById(id)
-    for index, zoneInfo in pairs(mzp.zoneInfoTable) do
-       if zoneInfo.id == id then
-         return zoneInfo, index
-       end
+  for index, zoneInfo in pairs(mzp.zoneInfoTable) do
+    if zoneInfo.id == id then
+      return zoneInfo, index
     end
-    return nil, nil
+  end
+  return nil, nil
 end
 
 function mzp.findNewZoneId()
-    local maxId = mzp.maxZoneId
-    for _, zoneInfo in pairs(mzp.zoneInfoTable) do
-        local intId = tonumber(zoneInfo.id)
-        if intId and intId > maxId then
-            maxId = intId
-        end
+  local maxId = mzp.maxZoneId
+  for _, zoneInfo in pairs(mzp.zoneInfoTable) do
+    local intId = tonumber(zoneInfo.id)
+    if intId and intId > maxId then
+      maxId = intId
     end
-    return tostring(maxId + 1)
+  end
+  return tostring(maxId + 1)
 end
 
 function mzp.createZone(name, id)
-    local err, createdId = nil, nil
-    local zoneInfo = {}
-    if id == nil then
-        id = mzp.findNewZoneId()
-    end
-    if mzp.findZoneById(id) then
-        err = string.format("id %s already exists", id)
-        mzp.maxZoneId = mzp.maxZoneId + 1
-        print("----- [mzp.createZone] "..err)
-        return err, createdId
-    end
-    zoneInfo.id = id
-    zoneInfo.name = name
-    zoneInfo.state = mzp.notPresent
-    table.insert(mzp.zoneInfoTable, zoneInfo)
-    createdId = id
-
-    local intId = tonumber(id)
-    if intId and intId > mzp.maxZoneId then
-        mzp.maxZoneId = intId
-    end
-    print("----- [mzp.createZone] createZone")
-
+  local err, createdId = nil, nil
+  local zoneInfo = {}
+  if id == nil then
+    id = mzp.findNewZoneId()
+  end
+  if mzp.findZoneById(id) then
+    err = string.format("id %s already exists", id)
+    mzp.maxZoneId = mzp.maxZoneId + 1
     return err, createdId
+  end
+  zoneInfo.id = id
+  zoneInfo.name = name
+  zoneInfo.state = mzp.notPresent
+  table.insert(mzp.zoneInfoTable, zoneInfo)
+  createdId = id
+
+  local intId = tonumber(id)
+  if intId and intId > mzp.maxZoneId then
+    mzp.maxZoneId = intId
+  end
+
+  return err, createdId
 end
 
 function mzp.deleteZone(id)
-    local err, deletedId = nil, nil
-    local zoneInfo, index = mzp.findZoneById(id)
-    if zoneInfo then
-        table.remove(mzp.zoneInfoTable, index)
-        deletedId = id
-    else
-        err = string.format("id %s doesn't exists", id)
-        print("----- [mzp.deleteZone] "..err)
-    end
-    return err, deletedId
+  local err, deletedId = nil, nil
+  local zoneInfo, index = mzp.findZoneById(id)
+  if zoneInfo then
+    table.remove(mzp.zoneInfoTable, index)
+    deletedId = id
+  else
+    err = string.format("id %s doesn't exists", id)
+  end
+  return err, deletedId
 end
 
 function mzp.renameZone(id, name)
-    print("----- [renameZone] entry")
-    local err, changedId = nil, nil
-    local zoneInfo = mzp.findZoneById(id)
-    if zoneInfo then
-        print("----- [renameZone] zoneInfo change, name = "..name.." / id = "..id)
-        zoneInfo.name = name
-        changedId = id
-    else
-        err = string.format("id %s doesn't exists", id)
-    end
-    print("----- [renameZone] exit")
-    return err, changedId
+  local err, changedId = nil, nil
+  local zoneInfo = mzp.findZoneById(id)
+  if zoneInfo then
+    zoneInfo.name = name
+    changedId = id
+  else
+    err = string.format("id %s doesn't exists", id)
+  end
+  return err, changedId
 end
 
 function mzp.changeState(id, state)
-    local err, changedId = nil, nil
-    local zoneInfo = mzp.findZoneById(id)
-    if zoneInfo then
-        zoneInfo.state = state
-        changedId = id
-    else
-        err = string.format("id %s doesn't exists", id)
-    end
-    return err, changedId
+  local err, changedId = nil, nil
+  local zoneInfo = mzp.findZoneById(id)
+  if zoneInfo then
+    zoneInfo.state = state
+    changedId = id
+  else
+    err = string.format("id %s doesn't exists", id)
+  end
+  return err, changedId
 end
 
 mzp.commands.updateZoneName = {}
 mzp.commands.updateZoneName.name = "updateZoneName"
 function mzp.commands.updateZoneName.handler(driver, device, args)
-    local name = args.args.name
-    local id = args.args.id
-    mzp.renameZone(id, name)
-    mzp.updateAttribute(driver, device)
+  local name = args.args.name
+  local id = args.args.id
+  mzp.renameZone(id, name)
+  mzp.updateAttribute(driver, device)
 end
 
 mzp.commands.deleteZone = {}
 mzp.commands.deleteZone.name = "deleteZone"
 function mzp.commands.deleteZone.handler(driver, device, args)
-    local id = args.args.id
-    mzp.deleteZone(id)
-    mzp.updateAttribute(driver, device)
+  local id = args.args.id
+  mzp.deleteZone(id)
+  mzp.updateAttribute(driver, device)
 end
 
 mzp.commands.createZone = {}
 mzp.commands.createZone.name = "createZone"
 function mzp.commands.createZone.handler(driver, device, args)
-    local name = args.args.name
-    local id = args.args.id
-    mzp.createZone(name, id)
-    mzp.updateAttribute(driver, device)
+  local name = args.args.name
+  local id = args.args.id
+  mzp.createZone(name, id)
+  mzp.updateAttribute(driver, device)
 end
 
 function mzp.updateAttribute(driver, device)
-    -- device:emit_event(mzp.capability.zoneState({value = mzp.zoneInfoTable}, {data = { lastId = "MYID", state = "present"}}))
-    print("----- [mzp.updateAttribute] entry")
-    device:emit_component_event(device.profile.components[COMP_PRESENCE], mzp.capability.zoneState({value = mzp.zoneInfoTable}, {data = { lastId = "MYID", state = "present"}}))
-    print("----- [mzp.updateAttribute] exit")
+  device:emit_component_event(device.profile.components[COMP_PRESENCE],
+    mzp.capability.zoneState({ value = mzp.zoneInfoTable }, { data = { lastId = "MYID", state = "present" } }))
 end
 
 return mzp

@@ -247,9 +247,9 @@ local function connecting_action(source)
       local use_ssl = false
       if source.url.scheme == "https" then
         use_ssl = true
-        end
+      end
 
-        source._sock = source._sock_builder(source.url.host, source.url.port, use_ssl)
+      source._sock = source._sock_builder(source.url.host, source.url.port, use_ssl)
     else
       source._sock, err = socket.tcp()
       if err ~= nil then return nil, err end
@@ -434,7 +434,7 @@ function EventSource.new(url, extra_headers, sock_builder)
   if url_table.scheme == "https" then
     use_ssl = true
   end
-  
+
   if not url_table.port then
     if url_table.scheme == "http" then
       url_table.port = 80

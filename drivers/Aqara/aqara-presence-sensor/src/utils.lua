@@ -64,7 +64,6 @@ function utils.labeled_socket_builder(label, ssl_config)
 
   if not ssl_config then
     ssl_config = { mode = "client", protocol = "any", verify = "none", options = "all" }
-    -- ssl_config = { mode = "client", protocol = "any", verify = "none", options = "all", cafile = "./selfSignedRoot.crt" }
   end
 
   local function make_socket(host, port, wrap_ssl)

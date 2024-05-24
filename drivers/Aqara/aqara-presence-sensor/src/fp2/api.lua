@@ -10,49 +10,48 @@ fp2_api.__index = fp2_api
 local CREDENTIAL_TIME_OUT_SECONDS = 30
 
 local SSL_CONFIG = {
-    mode = "client",
-    protocol = "any",
-    verify = "peer",
-    options = "all",
-    cafile = "./selfSignedRootByAqaraLife.crt"
-    -- cafile = "./selfSignedRoot.crt"
+  mode = "client",
+  protocol = "any",
+  verify = "peer",
+  options = "all",
+  cafile = "./selfSignedRootByAqaraLife.crt"
 }
 
 local ADDITIONAL_HEADERS = {
-    ["Accept"] = "application/json",
-    ["Content-Type"] = "application/json",
+  ["Accept"] = "application/json",
+  ["Content-Type"] = "application/json",
 }
 
 function fp2_api.labeled_socket_builder(label)
-    local socket_builder = utils.labeled_socket_builder(label, SSL_CONFIG)
-    return socket_builder
+  local socket_builder = utils.labeled_socket_builder(label, SSL_CONFIG)
+  return socket_builder
 end
 
 local function get_base_url(device_ip)
-    return "https://" .. device_ip .. ":443"
+  return "https://" .. device_ip .. ":443"
 end
 
 local function process_rest_response(response, err, partial)
-    if err ~= nil then
-        return response, err, nil
-    elseif response ~= nil then
-        local status, decoded_json = pcall(json.decode, response:get_body())
-        return decoded_json, nil, response.status
-    else
-        return nil, "no response or error received", nil
-    end
+  if err ~= nil then
+    return response, err, nil
+  elseif response ~= nil then
+    local _, decoded_json = pcall(json.decode, response:get_body())
+    return decoded_json, nil, response.status
+  else
+    return nil, "no response or error received", nil
+  end
 end
 
 local function retry_fn(retry_attempts)
-    local count = 0
-    return function()
-        count = count + 1
-        return count < retry_attempts
-    end
+  local count = 0
+  return function()
+    count = count + 1
+    return count < retry_attempts
+  end
 end
 
 local function do_get(api_instance, path)
-    return process_rest_response(api_instance.client:get(path, api_instance.headers, retry_fn(5)))
+  return process_rest_response(api_instance.client:get(path, api_instance.headers, retry_fn(5)))
 end
 
 local function do_put(api_instance, path, payload)
@@ -64,46 +63,45 @@ local function do_post(api_instance, path, payload)
 end
 
 function fp2_api.new_device_manager(device_ip, bridge_info, socket_builder)
-    local base_url = get_base_url(device_ip)
+  local base_url = get_base_url(device_ip)
 
-    return setmetatable(
-        {
-            headers = ADDITIONAL_HEADERS,
-            client = RestClient.new(base_url, socket_builder),
-            base_url = base_url,
-        }, fp2_api
-    )
+  return setmetatable(
+    {
+      headers = ADDITIONAL_HEADERS,
+      client = RestClient.new(base_url, socket_builder),
+      base_url = base_url,
+    }, fp2_api
+  )
 end
 
 function fp2_api:add_header(key, value)
-    log.info(string.format("add_header : key= %s, value= %s", key, value))
-    self.headers[key] = value
+  log.info(string.format("add_header : key= %s, value= %s", key, value))
+  self.headers[key] = value
 end
 
 function fp2_api.get_credential(device_ip, socket_builder)
-    local response, error, status = process_rest_response(RestClient.one_shot_get(get_base_url(device_ip) .. "/authcode",
-        ADDITIONAL_HEADERS, socket_builder))
-    if not error and status == 200 then
-        local token = response
-        log.info(string.format("get_credential : ip = %s, token = %s", device_ip, token))
-        return token
-    else
-        log.error(string.format("get_credential : ip = %s, failed to get token, error = %s", device_ip, error))
-    end
+  local response, error, status = process_rest_response(RestClient.one_shot_get(get_base_url(device_ip) .. "/authcode",
+    ADDITIONAL_HEADERS, socket_builder))
+  if not error and status == 200 then
+    local token = response
+    log.info(string.format("get_credential : ip = %s, token = %s", device_ip, token))
+    return token
+  else
+    log.error(string.format("get_credential : ip = %s, failed to get token, error = %s", device_ip, error))
+  end
 end
 
 function fp2_api.get_info(device_ip, socket_builder)
-    return process_rest_response(RestClient.one_shot_get(get_base_url(device_ip) .. "/info", ADDITIONAL_HEADERS,
-        socket_builder))
+  return process_rest_response(RestClient.one_shot_get(get_base_url(device_ip) .. "/info", ADDITIONAL_HEADERS,
+    socket_builder))
 end
 
 function fp2_api:get_attr()
-    print("----- [get_attr] entry")
-    return do_get(self, "/attr")
+  return do_get(self, "/attr")
 end
 
 function fp2_api:get_sse_url()
-    return self.base_url .. "/status"
+  return self.base_url .. "/status"
 end
 
 return fp2_api
