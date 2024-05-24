@@ -54,7 +54,7 @@ function discovery.device_added(driver, device)
   driver.lifecycle_handlers.init(driver, device)
 
   -- fp2_device_manager.init_work_mode(device)
-  driver.device_manager.init_work_mode(device)
+  -- driver.device_manager.init_work_mode(device)
 
   -- multipleZonePresence.zoneInfoTable = utils.deep_copy(device:get_latest_state("main", multipleZonePresence.id, "zoneState", {}))
   -- multipleZonePresence.updateAttribute(driver, device)

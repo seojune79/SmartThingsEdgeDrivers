@@ -24,7 +24,7 @@ components:
     - name: PresenceSensor
 - id: mode
   capabilities:
-    - id: mode
+    - id: stse.deviceMode
       version: 1
   categories:
     - name: PresenceSensor

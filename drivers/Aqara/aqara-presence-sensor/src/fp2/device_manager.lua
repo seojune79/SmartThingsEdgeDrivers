@@ -7,6 +7,7 @@ local multipleZonePresence = require "multipleZonePresence"
 
 local PresenceSensor = capabilities.presenceSensor
 local MovementSensor = capabilities.movementSensor
+local DeviceMode = capabilities["stse.deviceMode"]
 
 local MOVEMENT_TIMER = "movement_timer"
 local MOVEMENT_TIME = 5
@@ -17,7 +18,7 @@ local COMP_MODE = "mode"
 local device_manager = {}
 device_manager.__index = device_manager
 
-local FP2_MODES = { "ZoneDetection", "FallDetection", "SleepMonitoring" }
+local FP2_MODES = { "zoneDetection", "fallDetection", "sleepMonitoring" }
 
 function device_manager.presence_handler(driver, device, zone, evt_value)
     local evt_action = "not present"
@@ -90,21 +91,29 @@ function device_manager.work_mode_handler(driver, device, zone, evt_value)
     end
     -- device:emit_event(capabilities.mode.mode(FP2_MODES[mode]))
     print("----- [device_manager.work_mode_handler] "..profile_name)
-    device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.mode(FP2_MODES[mode]))
-    -- device:try_update_metadata({ profile = profile_name })
+    -- device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.mode(FP2_MODES[mode]))
+    device:emit_component_event(device.profile.components[COMP_MODE], DeviceMode.mode(FP2_MODES[mode]))
+    device:try_update_metadata({ profile = profile_name })
 end
 
-function device_manager.init_work_mode(device)
+function device_manager.init_movement(device)
+    print("----- [device_manager.init_movement] entry")
+    local lastMode = device:get_latest_state(COMP_MODE, DeviceMode.mode.ID, DeviceMode.mode.NAME) or "zoneDetection"
+    -- local lastMode = device:get_latest_state(device.profile.components[COMP_MODE], capabilities.mode.ID, DeviceMode.mode.NAME) or "zoneDetection"
+    print("----- [device_manager.init_movement] lastMode")
+    print("----- [device_manager.init_movement] lastMode = "..lastMode)
+    if lastMode ~= "zoneDetection" then return end
     -- device:emit_event(capabilities.mode.supportedModes(FP2_MODES, { visibility = {displayed=false}}))
     -- device:emit_event(capabilities.mode.mode(FP2_MODES[1]))
-    device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.supportedModes(FP2_MODES, { visibility = {displayed=false}}))
-    device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.mode(FP2_MODES[1]))
+    -- device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.supportedModes(FP2_MODES, { visibility = {displayed=false}}))
+    -- device:emit_component_event(device.profile.components[COMP_MODE], capabilities.mode.mode(FP2_MODES[1]))
     if device:get_field(MOVEMENT_TIMER) then
         device.thread:cancel_timer(MOVEMENT_TIMER)
         device:set_field(MOVEMENT_TIMER, nil)
     end
     -- device:emit_event(MovementSensor.movement("noMovement"))
     device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("inactive"))
+    print("----- [device_manager.init_movement] exit")
 end
 
 function device_manager.zone_quantities_handler_original(driver, device, zone, evt_value)

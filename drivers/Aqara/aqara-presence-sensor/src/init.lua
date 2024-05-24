@@ -153,6 +153,7 @@ end
 local function do_refresh(driver, device, cmd)
   log.info(string.format("refresh : dni= %s", device.device_network_id))
   check_and_update_connection(driver, device)
+  driver.device_manager.init_movement(device)
   status_update(driver, device)
 end
 
