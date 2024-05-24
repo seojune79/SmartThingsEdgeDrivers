@@ -6,7 +6,7 @@ local capabilities = require "st.capabilities"
 local multipleZonePresence = require "multipleZonePresence"
 
 local PresenceSensor = capabilities.presenceSensor
-local MovementSensor = capabilities["stse.movementSensor"]
+local MovementSensor = capabilities.movementSensor
 
 local MOVEMENT_TIMER = "movement_timer"
 local MOVEMENT_TIME = 5
@@ -31,34 +31,34 @@ function device_manager.movement_handler(driver, device, zone, evt_value)
 
     local no_movement = function()
         -- device:emit_event(MovementSensor.movement("noMovement"))
-        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("noMovement"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("inactive"))
     end
     device:set_field(MOVEMENT_TIMER, device.thread:call_with_delay(MOVEMENT_TIME, no_movement))
 
     if val == 0 then
         -- device:emit_event(MovementSensor.movement("enter"))
-        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("enter"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("entering"))
     elseif val == 1 then
         -- device:emit_event(MovementSensor.movement("leave"))
-        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leave"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leaving"))
     elseif val == 2 then
         -- device:emit_event(MovementSensor.movement("enter")) -- 좌진(신규 필요)
-        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("enter")) -- 좌진(신규 필요)
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("entering")) -- 좌진(신규 필요)
     elseif val == 3 then
         -- device:emit_event(MovementSensor.movement("leave")) -- 우출(신규 필요)
-        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leave")) -- 우출(신규 필요)
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leaving")) -- 우출(신규 필요)
     elseif val == 4 then
         -- device:emit_event(MovementSensor.movement("enter")) -- 우진(신규 필요)
-        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("enter")) -- 우진(신규 필요)
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("entering")) -- 우진(신규 필요)
     elseif val == 5 then
         -- device:emit_event(MovementSensor.movement("leave")) -- 좌출(신규 필요)
-        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leave")) -- 좌출(신규 필요)
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("leaving")) -- 좌출(신규 필요)
     elseif val == 6 then
         -- device:emit_event(MovementSensor.movement("approaching"))
         device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("approaching"))
     elseif val == 7 then
         -- device:emit_event(MovementSensor.movement("goingAway"))
-        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("goingAway"))
+        device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("movingAway"))
     end
 end
 
@@ -104,7 +104,7 @@ function device_manager.init_work_mode(device)
         device:set_field(MOVEMENT_TIMER, nil)
     end
     -- device:emit_event(MovementSensor.movement("noMovement"))
-    device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("noMovement"))
+    device:emit_component_event(device.profile.components[COMP_PRESENCE], MovementSensor.movement("inactive"))
 end
 
 function device_manager.zone_quantities_handler_original(driver, device, zone, evt_value)

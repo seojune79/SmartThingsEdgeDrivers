@@ -10,7 +10,7 @@ components:
   capabilities:
     - id: presenceSensor
       version: 1
-    - id: stse.movementSensor
+    - id: movementSensor
       version: 1
     - id: multipleZonePresence
       version: 1
