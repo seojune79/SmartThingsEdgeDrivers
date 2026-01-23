@@ -1,3 +1,4 @@
+local log = require "log"
 local security = require "st.security"
 local ZigbeeDriver = require "st.zigbee"
 local data_types = require "st.zigbee.data_types"
@@ -100,6 +101,10 @@ end
 
 local function toValue(payload, start, length)
   return utils.deserialize_int(string.sub(payload, start, start + length - 1), length, false, false)
+end
+
+local function toString(payload, start, length)
+  return string.sub(payload, start, start + length - 1)
 end
 
 local function toHex(value, length)
@@ -254,15 +259,18 @@ local function lock_state_handler(driver, device, value, zb_rx)
     local serial_num = toValue(msg, 3, 2)
     local last_serial_num = device:get_field(SERIAL_NUM_RX) or 0
 
-    if serial_num > last_serial_num then
+    -- if serial_num > last_serial_num then
       device:set_field(SERIAL_NUM_RX, serial_num)
       if resource_id[func_id] then
         resource_id[func_id].event_handler(driver, device, resource_id[func_id].event_name,
           toValue(payload, 6, string.byte(payload, 5)))
       end
-    else
-      request_generate_shared_key(device)
-    end
+      if func_id == "8.0.2223" then
+        log.warn(toString(payload, 6, string.byte(payload, 5)))
+      end
+    -- else
+      -- request_generate_shared_key(device)
+    -- end
   end
 end
 
