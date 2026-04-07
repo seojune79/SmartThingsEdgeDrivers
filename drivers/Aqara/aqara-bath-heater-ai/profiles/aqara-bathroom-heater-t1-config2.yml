@@ -1,4 +1,4 @@
-name: aqara-bathroom-heater-t1
+name: aqara-bathroom-heater-t1-config2
 components:
   - id: main
     label: "욕실 난방/환풍"
@@ -42,15 +42,14 @@ components:
       - name: Thermostat
 config:
   detailView:
-  - capability: thermostatMode
-  - capability: thermostatHeatingSetpoint
-    visibleCondition:
-      component: main
-      capability: thermostatMode
-      attribute: thermostatMode.value
-      operator: ONE_OF
-      operand:
-        - heat
+  # - capability: thermostatHeatingSetpoint
+  #   visibleCondition:
+  #     component: main
+  #     capability: thermostatMode
+  #     attribute: thermostatMode.value
+  #     operator: ONE_OF
+  #     operand:
+  #       - heat
   - capability: fanOscillationMode
     visibleCondition:
       component: main
@@ -61,17 +60,17 @@ config:
         - heat
         - dryair
         - cool
-  - capability: fanSpeed
-    visibleCondition:
-      component: main
-      capability: thermostatMode
-      attribute: thermostatMode.value
-      operator: ONE_OF
-      operand:
-        - heat
-        - dryair
-        - cool
-        - fanonly
+  # - capability: fanSpeed
+  #   visibleCondition:
+  #     component: main
+  #     capability: thermostatMode
+  #     attribute: thermostatMode.value
+  #     operator: ONE_OF
+  #     operand:
+  #       - heat
+  #       - dryair
+  #       - cool
+  #       - fanonly
 
 preferences:
   # ── 야간 조명 모드 (0x0518, Uint32) ──────────────────────

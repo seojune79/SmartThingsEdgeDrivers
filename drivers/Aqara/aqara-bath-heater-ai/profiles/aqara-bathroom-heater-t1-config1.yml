@@ -1,4 +1,4 @@
-name: aqara-bathroom-heater-t1
+name: aqara-bathroom-heater-t1-config1
 components:
   - id: main
     label: "욕실 난방/환풍"
