@@ -503,11 +503,27 @@ end
 -- 수명주기
 -- ──────────────────────────────────────────────
 
+local SUPPORTED_THERMOSTAT_MODES = {
+  capabilities.thermostatMode.thermostatMode.off.NAME,
+  capabilities.thermostatMode.thermostatMode.heat.NAME,
+  capabilities.thermostatMode.thermostatMode.dryair.NAME,
+  capabilities.thermostatMode.thermostatMode.cool.NAME,
+  capabilities.thermostatMode.thermostatMode.fanonly.NAME
+}
+
+local SUPPORTED_FAN_MODES = {
+  capabilities.fanOscillationMode.fanOscillationMode.swing.NAME,
+  capabilities.fanOscillationMode.fanOscillationMode.fixed.NAME
+}
+
+
 local function device_init(driver, device)
+  -- mode init
+  device:emit_event(capabilities.thermostatMode.supportedThermostatModes(SUPPORTED_THERMOSTAT_MODES, { visibility = { displayed = false } }))
   log.info("device_init: " .. (device.label or device.id))
   -- 지원 fanOscillationMode 목록 고정 (swing/fixed만 표시)
   device:emit_event(capabilities.fanOscillationMode.supportedFanOscillationModes(
-    {"swing", "fixed"}, { visibility = { displayed = false } }
+    SUPPORTED_FAN_MODES, { visibility = { displayed = false } }
   ))
   -- 난방 설정 온도 범위 고정 (16~45°C)
   device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpointRange(
@@ -693,7 +709,7 @@ local aqara_bathroom_heater_driver = ZigbeeDriver("aqara-bathroom-heater-t1", {
       },
     },
   },
-
+  health_check = false,
   lifecycle_handlers = {
     init        = device_init,
     added       = device_added,

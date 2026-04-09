@@ -1,6 +1,6 @@
 zigbeeManufacturer:
   - id: "aqara-bathroom-heater-t1"
-    deviceProfileName: "aqara-bathroom-heater-t1-config2"
+    deviceProfileName: "aqara-bathroom-heater-t1-config3"
     deviceLabel: "Aqara Bath Heater T1"
     manufacturer: "Aqara"
     model: "lumi.bhf_light.acn001"

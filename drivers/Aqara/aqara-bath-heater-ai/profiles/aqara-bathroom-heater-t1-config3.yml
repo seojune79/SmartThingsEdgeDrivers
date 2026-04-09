@@ -1,4 +1,4 @@
-name: aqara-bathroom-heater-t1-config1
+name: aqara-bathroom-heater-t1-config3
 components:
   - id: main
     label: "욕실 난방/환풍"
@@ -40,40 +40,104 @@ components:
               range: [1, 3]
     categories:
       - name: Thermostat
-config:
+deviceConfig:
+  dashboard:
+    states:
+      - component: main
+        capability: switch
+        version: 1
+    actions:
+    - component: main
+      capability: switch
+      version: 1
   detailView:
-  # - id: switch
-  # - id: switchLevel
-  # - id: colorTemperature
-  # - capability: thermostatMode
-  - capability: thermostatHeatingSetpoint
+  - component: main
+    capability: switch
+    version: 1
+  - component: main
+    capability: switchLevel
+    version: 1
+  - component: main
+    capability: colorTemperature
+    version: 1
+  - component: main
+    capability: thermostatMode
+    version: 1
+  - component: main
+    capability: thermostatHeatingSetpoint
+    version: 1
     visibleCondition:
       component: main
       capability: thermostatMode
-      attribute: thermostatMode.value
-      operator: ONE_OF
-      operand:
-        - off
-        - dryair
-        - cool
-        - fanonly
-  - capability: fanOscillationMode
+      version: 1
+      value: thermostatMode.value
+      operator: EQUALS
+      operand: "heat"
+  - component: main
+    capability: fanOscillationMode
+    version: 1
     visibleCondition:
       component: main
       capability: thermostatMode
-      attribute: thermostatMode.value
+      version: 1
+      value: thermostatMode.value
       operator: ONE_OF
-      operand:
-        - off
-        - fanonly
-  - capability: fanSpeed
+      operand: '["heat", "dryair", "cool"]'
+  - component: main
+    capability: fanSpeed
+    version: 1
     visibleCondition:
       component: main
       capability: thermostatMode
-      attribute: thermostatMode.value
+      version: 1
+      value: thermostatMode.value
       operator: ONE_OF
-      operand:
-        - off
+      operand: '["heat", "dryair", "cool", "fanonly"]'
+  automation:
+    conditions:
+    - component: main
+      capability: switch
+      version: 1
+    - component: main
+      capability: switchLevel
+      version: 1
+    - component: main
+      capability: colorTemperature
+      version: 1
+    - component: main
+      capability: thermostatMode
+      version: 1
+    - component: main
+      capability: thermostatHeatingSetpoint
+      version: 1
+    - component: main
+      capability: fanOscillationMode
+      version: 1
+    - component: main
+      capability: fanSpeed
+      version: 1
+    actions:
+    - component: main
+      capability: switch
+      version: 1
+    - component: main
+      capability: switchLevel
+      version: 1
+    - component: main
+      capability: colorTemperature
+      version: 1
+    - component: main
+      capability: thermostatMode
+      version: 1
+    - component: main
+      capability: thermostatHeatingSetpoint
+      version: 1
+    - component: main
+      capability: fanOscillationMode
+      version: 1
+    - component: main
+      capability: fanSpeed
+      version: 1
 
 preferences:
   # ── 야간 조명 모드 (0x0518, Uint32) ──────────────────────
