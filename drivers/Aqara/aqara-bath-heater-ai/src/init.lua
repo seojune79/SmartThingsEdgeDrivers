@@ -552,14 +552,14 @@ local function device_added(driver, device)
 end
 
 local function send_night_light(device, new)
-  local start_min = (tonumber(new.nightLightStartHour) * 60 + tonumber(new.nightLightStartMin)) & 0xFFF
-  local end_half  = ((tonumber(new.nightLightEndHour) * 60 + tonumber(new.nightLightEndMin)) * 2) & 0xFFF
+  local start_min = (tonumber(new.nightLightStartHour) * 60) & 0xFFF
+  local end_half  = (tonumber(new.nightLightEndHour) * 60) & 0xFFF
   local on_val    = (start_min << 12) | end_half
   local val       = new.nightLightMode and on_val or (on_val + 1)
-  log.info(string.format("야간 조명 모드: %s (0x%08X) start=%02d:%02d end=%02d:%02d",
+  log.info(string.format("야간 조명 모드: %s (0x%08X) start=%02d:00 end=%02d:00",
     new.nightLightMode and "on" or "off", val,
-    tonumber(new.nightLightStartHour), tonumber(new.nightLightStartMin),
-    tonumber(new.nightLightEndHour),   tonumber(new.nightLightEndMin)))
+    tonumber(new.nightLightStartHour),
+    tonumber(new.nightLightEndHour)))
   device:send(cluster_base.write_manufacturer_specific_attribute(
     device, aqara.CLUSTER_ID, aqara.ATTR_NIGHT_LIGHT,
     aqara.MFG_CODE, data_types.Uint32, val))
@@ -600,9 +600,7 @@ local function info_changed(driver, device, event, args)
   local mode_changed = old.nightLightMode ~= new.nightLightMode
   local time_changed =
     old.nightLightStartHour ~= new.nightLightStartHour or
-    old.nightLightStartMin  ~= new.nightLightStartMin  or
-    old.nightLightEndHour   ~= new.nightLightEndHour   or
-    old.nightLightEndMin    ~= new.nightLightEndMin
+    old.nightLightEndHour   ~= new.nightLightEndHour
   if mode_changed then
     send_night_light(device, new)
   elseif time_changed and new.nightLightMode == true then
