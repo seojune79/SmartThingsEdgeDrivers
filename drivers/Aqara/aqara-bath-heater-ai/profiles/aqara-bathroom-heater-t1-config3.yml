@@ -209,20 +209,3 @@ preferences:
     definition:
       id: thermostatCtrl
       default: true
-
-  # ── 예약 종료 시간 설정 (0x02A5) ───────────────────────────────
-  - title: "예약 종료 시간 설정"
-    name: timeLapseStopTime
-    required: false
-    description: "Please press and hold the 'stop' button on the remote for 3 seconds to enable this function."
-    preferenceType: enumeration
-    definition:
-      options:
-        0: 15
-        1: 30
-        2: 45
-        3: 60
-        4: 75
-        5: 90
-        6: 120
-      default: "0"

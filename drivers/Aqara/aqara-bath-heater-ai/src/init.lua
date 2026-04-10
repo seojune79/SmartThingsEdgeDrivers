@@ -569,19 +569,6 @@ local function device_do_configure(driver, device)
   log.info("device_do_configure")
 end
 
--- local function set_mute_beep(device, status)
---   local val = status and 1 or 0
---   device:send(cluster_base.write_manufacturer_specific_attribute(
---     device, aqara.CLUSTER_ID, aqara.ATTR_DND_SWITCH,
---     aqara.MFG_CODE, data_types.Uint8, val))
---   if val == 0 then -- 비프음 비활성화 시 24시간 설정(항상 OFF 목적)
---     -- local fulltime = (0x12) | (0x00 << 8) | (0x12 << 16) | (0x00 << 24)
---     device:send(cluster_base.write_manufacturer_specific_attribute(
---       device, aqara.CLUSTER_ID, aqara.ATTR_DND_TIME,
---       aqara.MFG_CODE, data_types.Uint32, 0x00120012))
---   end
--- end
-
 local function info_changed(driver, device, event, args)
   log.info("info_changed")
   if args.old_st_store.preferences == nil then return end
@@ -622,24 +609,6 @@ local function info_changed(driver, device, event, args)
     end
   end
 
-  -- -- ④ 동작 비프음 소거 기간 (0x0257, Uint32: byte0=start_hr, byte1=start_min, byte2=end_hr, byte3=end_min)
-  -- if old.muteBeepStartHour ~= new.muteBeepStartHour or
-  --    old.muteBeepStartMin  ~= new.muteBeepStartMin  or
-  --    old.muteBeepEndHour   ~= new.muteBeepEndHour   or
-  --    old.muteBeepEndMin    ~= new.muteBeepEndMin    then
-  --   local sh = new.muteBeepStartHour & 0xFF
-  --   local sm = new.muteBeepStartMin  & 0xFF
-  --   local eh = new.muteBeepEndHour   & 0xFF
-  --   local em = new.muteBeepEndMin    & 0xFF
-  --   local val = (sh) | (sm << 8) | (eh << 16) | (em << 24)
-  --   if new.muteBeep == true then
-  --     log.info(string.format("비프음 소거 기간: %02d:%02d ~ %02d:%02d", sh, sm, eh, em))
-  --     device:send(cluster_base.write_manufacturer_specific_attribute(
-  --       device, aqara.CLUSTER_ID, aqara.ATTR_DND_TIME,
-  --       aqara.MFG_CODE, data_types.Uint32, 0x00120012))
-  --   end
-  -- end
-
   -- ⑤ 색온도 동기화 (0x02A6, Boolean)
   if old.colorTempSync ~= new.colorTempSync then
     local val = new.colorTempSync and true or false
@@ -656,17 +625,6 @@ local function info_changed(driver, device, event, args)
     device:send(cluster_base.write_manufacturer_specific_attribute(
       device, aqara.CLUSTER_ID, aqara.ATTR_THERMOSTAT_CTRL_SW,
       aqara.MFG_CODE, data_types.Uint8, val))
-  end
-
-  -- 예약 종료 시간 설정 (0x02A5, Uint32)
-  if old.timeLapseStopTime ~= new.timeLapseStopTime then
-    local minutes = STOP_TIME_MAP[new.timeLapseStopTime] or 0
-    local seconds = minutes * 60
-    log.info(string.format("예약 종료 시간 설정: %02d 분", STOP_TIME_MAP[new.timeLapseStopTime] or 0))
-    local val = math.floor(seconds)
-    device:send(cluster_base.write_manufacturer_specific_attribute(
-      device, aqara.CLUSTER_ID, aqara.ATTR_DELAY_STOP_TIME,
-      aqara.MFG_CODE, data_types.Uint32, val))
   end
 end
 
