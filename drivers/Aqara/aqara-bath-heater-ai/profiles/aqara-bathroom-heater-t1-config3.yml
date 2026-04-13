@@ -51,14 +51,7 @@ deviceConfig:
         version: 1
         values:
         - key: "fanSpeed.value"
-          renge: [1, 3]
-      # - component: main
-      #   capability: fanSpeed
-      #   version: 1
-      #   config:
-      #     values:
-      #     - key: "fanSpeed.value"
-      #       renge: [1, 3]
+          range: [1, 3]
 
     actions:
     - component: main
@@ -100,6 +93,10 @@ deviceConfig:
   - component: main
     capability: fanSpeed
     version: 1
+    values:
+      - key: "fanSpeed.value"
+        range: [1, 3]
+        step: 1
     visibleCondition:
       component: main
       capability: thermostatMode
@@ -130,6 +127,10 @@ deviceConfig:
     - component: main
       capability: fanSpeed
       version: 1
+      values:
+        - key: "fanSpeed.value"
+          range: [1, 3]
+          step: 1
     actions:
     - component: main
       capability: switch
@@ -152,6 +153,10 @@ deviceConfig:
     - component: main
       capability: fanSpeed
       version: 1
+      values:
+        - key: "setFanSpeed"
+          range: [1, 3]
+          step: 1
 
 preferences:
   # ── 야간 조명 모드 (0x0518, Uint32) ──────────────────────
