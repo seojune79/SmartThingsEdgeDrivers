@@ -1,0 +1,6 @@
+name: aqara-bathroom-heater-t1
+version: 0.1.0
+driver: src/init.lua
+packageKey: aqara-bathroom-heater-t1
+permissions:
+  zigbee: {}
