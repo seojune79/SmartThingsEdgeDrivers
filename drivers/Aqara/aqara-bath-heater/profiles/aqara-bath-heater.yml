@@ -33,12 +33,14 @@ components:
               enabledValues:
                 - "swing"
                 - "fixed"
-      - id: fanSpeed
+      - id: fanMode
         config:
           values:
-            - key: "fanSpeed.value"
-              range: [1, 3]
-              step: 1
+            - key: "fanMode.value"
+              enabledValues:
+                - "low"
+                - "medium"
+                - "high"
     categories:
       - name: Thermostat
 deviceConfig:
@@ -48,12 +50,9 @@ deviceConfig:
         capability: switch
         version: 1
       - component: main
-        capability: fanSpeed
+        capability: fanMode
         version: 1
-        values:
-        - key: "fanSpeed.value"
-          range: [1, 3]
-          step: 1
+
     actions:
     - component: main
       capability: switch
@@ -92,12 +91,8 @@ deviceConfig:
       operator: ONE_OF
       operand: '["heat", "dryair", "cool"]'
   - component: main
-    capability: fanSpeed
+    capability: fanMode
     version: 1
-    values:
-      - key: "fanSpeed.value"
-        range: [1, 3]
-        step: 1
     visibleCondition:
       component: main
       capability: thermostatMode
@@ -126,12 +121,14 @@ deviceConfig:
       capability: fanOscillationMode
       version: 1
     - component: main
-      capability: fanSpeed
+      capability: fanMode
       version: 1
       values:
-        - key: fanSpeed.value
-          range: [1, 3]
-          step: 1
+        - key: "fanMode.value"
+          enabledValues:
+            - "low"
+            - "medium"
+            - "high"
     actions:
     - component: main
       capability: switch
@@ -152,27 +149,24 @@ deviceConfig:
       capability: fanOscillationMode
       version: 1
     - component: main
-      capability: fanSpeed
+      capability: fanMode
       version: 1
       values:
-        - key: setFanSpeed.speed
-          range: [1, 3]
-          step: 1
-
+        - key: "setFanMode.fanMode"
+          enabledValues:
+            - "low"
+            - "medium"
+            - "high"
 preferences:
-  # ── 야간 조명 모드 (0x0518, Uint32) ──────────────────────
-  # bits23-12: 시작시간(분), bits11-0: 종료시간(분×2)
-  # OFF = 현재값 + 1
-  - title: "야간 조명 모드"
-    description: "설정된 시간에 조명을 켜면 가장 어둡고 낮은 색온도로 전환합니다."
+  - title: "Night-light mode"
+    description: "Activates dim, low color temperature lighting during the set time period."
     name: nightLightMode
     required: false
     preferenceType: boolean
     definition:
       id: nightLightMode
       default: false
-
-  - title: "야간 조명 모드 시작 시간(0~23시)"
+  - title: "Night-light start time(0~23)"
     name: nightLightStartHour
     required: false
     preferenceType: integer
@@ -180,8 +174,7 @@ preferences:
       minimum: 0
       maximum: 23
       default: 21
-
-  - title: "야간 조명 모드 종료 시간(다음 날 0~23시)"
+  - title: "Night-light end time(0~23, Next day)"
     name: nightLightEndHour
     required: false
     preferenceType: integer
@@ -189,20 +182,16 @@ preferences:
       minimum: 0
       maximum: 23
       default: 9
-
-  # ── 동작 비프음 소거 (0x0256/0x0257) ─────────────────────
-  - title: "동작 비프음 소거"
-    description: "동작 비프음이 소거 됩니다."
+  - title: "Mute operation beep"
+    description: "Silences the device operation beep sounds."
     name: muteBeep
     required: false
     preferenceType: boolean
     definition:
       id: muteBeep
       default: false
-
-  # ── 항온 모드 (0x02BE) ────────────────────────────────────
-  - title: "항온 모드"
-    description: "목표 온도에 도달하면 자동 제어를 통해 일정한 온도를 유지합니다."
+  - title: "Constant temperature mode"
+    description: "Automatically maintains the target temperature by adjusting warm airflow."
     name: thermostatCtrl
     required: false
     preferenceType: boolean

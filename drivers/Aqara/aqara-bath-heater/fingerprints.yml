@@ -3,4 +3,4 @@ zigbeeManufacturer:
     deviceLabel: Aqara Bath Heater T1
     manufacturer: Aqara
     model: lumi.bhf_light.acn001
-    deviceProfileName: bathheater
+    deviceProfileName: "aqara-bath-heater"

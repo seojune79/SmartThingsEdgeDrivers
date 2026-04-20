@@ -1,5 +1,5 @@
-name: 'Aqara Bath Heater'
-packageKey: 'aqara-bathroom-heater-t1'
+name: Aqara Bath Heater
+packageKey: aqara-bath-heater-t1
 permissions:
   zigbee: {}
 description: "SmartThings driver for Aqara Bath Heater devices"
