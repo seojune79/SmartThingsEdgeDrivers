@@ -52,7 +52,6 @@ deviceConfig:
       - component: main
         capability: fanMode
         version: 1
-
     actions:
     - component: main
       capability: switch

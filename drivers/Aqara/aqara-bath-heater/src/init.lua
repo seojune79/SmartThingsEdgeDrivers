@@ -1,112 +1,76 @@
--- ============================================================
--- init.lua  ·  Aqara Smart Bathroom Heater T1 — SmartThings Edge Driver
---
--- 제어 방식: 오직 0xFCC0/0x024F 녹미(Lumi) 공조 압축코드만 사용
--- Thermostat / FanControl 클러스터 일절 사용하지 않음
---
--- 압축코드 64-bit 레이아웃 (big-endian 기준, bit63=MSB):
---   [63:48] setpoint  int16 ×0.01°C  (bits15-8≥0xFE, bits7-2=63 일 때 유효)
---   [47:32] actual    int16 ×0.01°C  (동일 조건)
---   [31:28] power     0=off 1=on 2=toggle E=circle F=invalid
---   [27:24] mode      0=heat 1=cool 2=auto 3=dry 4=wind 5=breathe E=circle F=invalid
---   [23:20] fan_set   0=low 1=mid 2=high 3=auto E=circle F=invalid
---   [19:18] direction 0=horiz 1=vert 2=circle 3=invalid
---   [17:16] swing     0=swing 1=fix 2=circle
---   [15:8]  temp_set  0~240°C  0xFF=invalid
---   [7:2]   temp_act  0~63°C (실제)
---   [1:0]   fan_act   0=off 1=low 2=mid 3=high
---
--- 스펙 예시:
---   대기         : 0xFFFFFFFF 0FFF FFFF
---   난방 40°C 중속: 0x0FA0FFFF 101C FFFF
---   상태동기(OFF) : 0xFFFF0AF0 0FFF FFFC
--- ============================================================
+-- Copyright 2026 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
+local capabilities    = require "st.capabilities"
+local ZigbeeDriver    = require "st.zigbee"
+local cluster_base    = require "st.zigbee.cluster_base"
+local zcl_clusters    = require "st.zigbee.zcl.clusters"
+local data_types      = require "st.zigbee.data_types"
 
-local capabilities  = require "st.capabilities"
-local ZigbeeDriver  = require "st.zigbee"
-local cluster_base  = require "st.zigbee.cluster_base"
-local zcl_clusters  = require "st.zigbee.zcl.clusters"
-local data_types    = require "st.zigbee.data_types"
+local aqara           = require "aqara_cluster"
 
-local aqara = require "aqara_cluster"
+local OnOff           = zcl_clusters.OnOff
+local Level           = zcl_clusters.Level
+local ColorControl    = zcl_clusters.ColorControl
 
-local OnOff        = zcl_clusters.OnOff
-local Level        = zcl_clusters.Level
-local ColorControl = zcl_clusters.ColorControl
-
--- ──────────────────────────────────────────────
--- AC 압축코드 상수
--- ──────────────────────────────────────────────
-local PWR  = { OFF=0x0, ON=0x1 }
+local PWR             = { OFF = 0x0, ON = 0x1 }
 -- AC mode bits27-24:
---   0 = warm air (난방)     → ST "heat"
---   3 = drying  (건조)      → ST "dryair"
---   4 = blowing (열풍환풍)   → ST "cool"
---   5 = ventilation (환기)  → ST "fanonly"
-local MODE = { HEAT=0x0, DRY=0x3, BLOW=0x4, VENT=0x5, INVALID=0xF }
+--   0 = heat
+--   3 = dryair
+--   4 = cool
+--   5 = fanonly
+local MODE            = { HEAT = 0x0, DRYAIR = 0x3, COOL = 0x4, FANONLY = 0x5, INVALID = 0xF }
 -- bits23-20: fan speed
---   0=low  1=middle  2=high  3=auto
-local FAN_LOW    = 0x0
-local FAN_MID    = 0x1
-local FAN_HIGH   = 0x2
-local FAN_AUTO   = 0x3
-local FAN_INVALID= 0xF
--- SmartThings fanMode("low"/"medium"/"high") → AC fan 값
-local MODE_TO_FAN = { ["low"]=FAN_LOW, ["medium"]=FAN_MID, ["high"]=FAN_HIGH }
--- AC fan 값 → SmartThings fanMode 문자열, auto=medium
-local FAN_TO_MODE = { [0]="low", [1]="medium", [2]="high", [3]="medium" }
--- bits17-16: swing 2비트만 설정 (bits19-18 direction은 no-change=0x3 유지)
---   swing=0 → 스윙 (바람 방향 자동 이동)
---   swing=1 → 고정 (바람 방향 고정)
-local SWING_ON  = 0x0   -- bits17-16 = 00 (swing)
-local SWING_OFF = 0x1   -- bits17-16 = 01 (fixed)
+--   0=low  1=middle  2=high
+local FAN_LOW         = 0x0
+local FAN_MID         = 0x1
+local FAN_HIGH        = 0x2
+local FAN_INVALID     = 0xF
 
--- SmartThings fanOscillationMode → swing 비트 값
+local MODE_TO_FAN     = { ["low"] = FAN_LOW, ["medium"] = FAN_MID, ["high"] = FAN_HIGH }
+local FAN_TO_MODE     = { [0] = "low", [1] = "medium", [2] = "high", [3] = "medium" }
+-- bits17-16: fanOscillationMode
+--   swing=0
+--   fix=1
+local SWING_ON        = 0x0 -- bits17-16 = 00 (swing)
+local SWING_OFF       = 0x1 -- bits17-16 = 01 (fixed)
 local ST_FAN_TO_SWING = {
   ["swing"] = SWING_ON,
   ["fixed"] = SWING_OFF,
 }
 
 -- SmartThings thermostatMode → AC 파라미터
-local ST_TO_AC = {
-  ["off"]     = { pwr=PWR.OFF, mode=MODE.INVALID, fan=FAN_INVALID },
-  ["heat"]    = { pwr=PWR.ON,  mode=MODE.HEAT,    fan=FAN_AUTO    }, -- warm air
-  ["dryair"]  = { pwr=PWR.ON,  mode=MODE.DRY,     fan=FAN_AUTO    }, -- drying
-  ["cool"]    = { pwr=PWR.ON,  mode=MODE.BLOW,    fan=FAN_AUTO    }, -- blowing
-  ["fanonly"] = { pwr=PWR.ON,  mode=MODE.VENT,    fan=FAN_AUTO    }, -- ventilation
+local ST_TO_AC        = {
+  ["off"]     = { pwr = PWR.OFF, mode = MODE.INVALID, fan = FAN_INVALID },
+  ["heat"]    = { pwr = PWR.ON, mode = MODE.HEAT, fan = FAN_MID },
+  ["dryair"]  = { pwr = PWR.ON, mode = MODE.DRYAIR, fan = FAN_MID },
+  ["cool"]    = { pwr = PWR.ON, mode = MODE.COOL, fan = FAN_MID },
+  ["fanonly"] = { pwr = PWR.ON, mode = MODE.FANONLY, fan = FAN_MID },
 }
 
--- AC mode → SmartThings mode 역매핑
-local AC_MODE_TO_ST = {
-  [0x0] = "heat",    -- warm air
-  [0x3] = "dryair",  -- drying
-  [0x4] = "cool",    -- blowing
-  [0x5] = "fanonly", -- ventilation
+-- AC mode to thermostatMode capability
+local AC_MODE_TO_ST   = {
+  [0x0] = "heat",
+  [0x3] = "dryair",
+  [0x4] = "cool",
+  [0x5] = "fanonly",
 }
 
--- 색온도 범위
-local MIRED_MIN = 153
-local MIRED_MAX = 370
+-- Color Temperature Range
+local MIRED_MIN       = 153
+local MIRED_MAX       = 370
 
--- ──────────────────────────────────────────────
--- 유틸리티
--- ──────────────────────────────────────────────
+-- utility
 local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
-
 local function kelvin_to_mired(k) return math.floor(1000000 / k) end
 local function mired_to_kelvin(m) return math.floor(1000000 / m) end
 
--- ──────────────────────────────────────────────
--- AC 압축코드 빌드 & 전송
--- 기본값 0xFFFFFFFFFFFFFFFF (모든 필드 = 0xF = no-change/invalid)
--- 에서 변경이 필요한 필드만 덮어써서 전송
--- params 테이블 (nil이면 해당 필드 no-change):
+-- AC code
+-- default: 0xFFFFFFFFFFFFFFFF
 --   pwr      : bits31-28  0=off 1=on
 --   mode     : bits27-24  0=heat 3=dry 4=blow 5=vent
 --   fan      : bits23-20  0=low 1=mid 2=high 3=auto
 --   swing    : bits17-16  0=swing 1=fixed
 --   setpoint : °C         hi32 bits63-48 (×0.01°C)
--- ──────────────────────────────────────────────
 local function send_ac_code(device, params)
   local hi32 = 0xFFFFFFFF
   local lo32 = 0xFFFFFFFF
@@ -135,12 +99,12 @@ local function send_ac_code(device, params)
   local bytes = string.char(
     (hi32 >> 24) & 0xFF,
     (hi32 >> 16) & 0xFF,
-    (hi32 >>  8) & 0xFF,
-     hi32        & 0xFF,
+    (hi32 >> 8) & 0xFF,
+    hi32 & 0xFF,
     (lo32 >> 24) & 0xFF,
     (lo32 >> 16) & 0xFF,
-    (lo32 >>  8) & 0xFF,
-     lo32        & 0xFF
+    (lo32 >> 8) & 0xFF,
+    lo32 & 0xFF
   )
 
   device:send(cluster_base.write_manufacturer_specific_attribute(
@@ -149,21 +113,19 @@ local function send_ac_code(device, params)
   ))
 end
 
--- ──────────────────────────────────────────────
--- 모드별 상태 persist 저장/복원
--- ──────────────────────────────────────────────
+-- last status save and restore
 local MODE_FIELDS = {
-  heat    = { "setpoint", "swing", "fan_speed" },
-  cool    = { "swing", "fan_speed" },
-  dryair  = { "swing", "fan_speed" },
-  fanonly = { "fan_speed" },
+  heat    = { "setpoint", "swing", "fan_mode" },
+  cool    = { "swing", "fan_mode" },
+  dryair  = { "swing", "fan_mode" },
+  fanonly = { "fan_mode" },
 }
 
 local MODE_DEFAULTS = {
-  heat    = { setpoint=25, swing="swing", fan_speed="medium" },
-  cool    = { swing="swing", fan_speed="medium" },
-  dryair  = { swing="swing", fan_speed="medium" },
-  fanonly = { fan_speed="medium" },
+  heat    = { setpoint = 25, swing = "swing", fan_mode = "medium" },
+  cool    = { swing = "swing", fan_mode = "medium" },
+  dryair  = { swing = "swing", fan_mode = "medium" },
+  fanonly = { fan_mode = "medium" },
 }
 
 local function save_mode_state(device, mode, field, value)
@@ -210,25 +172,23 @@ local function restore_mode_state(device, st_mode)
         device:set_field("fan_mode", v)
         device:emit_event(capabilities.fanOscillationMode.fanOscillationMode(v))
       end
-    elseif field == "fan_speed" then
-      local v = load_mode_state(device, st_mode, "fan_speed") or defaults.fan_speed
+    elseif field == "fan_mode" then
+      local v = load_mode_state(device, st_mode, "fan_mode") or defaults.fan_mode
       if v ~= nil then
         fan = MODE_TO_FAN[v]
-        device:set_field("fan_speed_ac", fan)
+        device:set_field("fan_mode_ac", fan)
         device:emit_event(capabilities.fanMode.fanMode(v))
       end
     end
   end
 
   if setpoint ~= nil or swing ~= nil or fan ~= nil then
-    send_ac_code(device, { setpoint=setpoint, swing=swing, fan=fan })
+    send_ac_code(device, { setpoint = setpoint, swing = swing, fan = fan })
   end
 end
 
--- ──────────────────────────────────────────────
--- [CAPABILITY → DEVICE]
--- ──────────────────────────────────────────────
 
+-- capabilitiy handlers
 local function handle_switch_on(driver, device, cmd)
   device:send(OnOff.server.commands.On(device))
 end
@@ -269,7 +229,7 @@ local function handle_thermostat_mode(driver, device, cmd)
     end
   end
 
-  send_ac_code(device, { pwr=pwr, mode=ac.mode, setpoint=setpoint })
+  send_ac_code(device, { pwr = pwr, mode = ac.mode, setpoint = setpoint })
   device:set_field("thermostat_mode", st_mode)
   device:emit_event(capabilities.thermostatMode.thermostatMode(st_mode))
   restore_mode_state(device, st_mode)
@@ -288,7 +248,7 @@ local function handle_heating_setpoint(driver, device, cmd)
 
   local cur = device:get_field("thermostat_mode") or "off"
   if cur == "heat" then
-    send_ac_code(device, { setpoint=temp_c })
+    send_ac_code(device, { setpoint = temp_c })
   end
 
   device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpoint(
@@ -302,23 +262,20 @@ local function handle_fan_mode(driver, device, cmd)
 
   device:set_field("fan_mode", st_fan)
   save_current_mode_field(device, "swing", st_fan)
-  send_ac_code(device, { swing=swing })
+  send_ac_code(device, { swing = swing })
   device:emit_event(capabilities.fanOscillationMode.fanOscillationMode(st_fan))
 end
 
 local function handle_mode(driver, device, cmd)
-  local fan_mode = cmd.args.fanMode  -- "low" / "medium" / "high"
-  local fan      = MODE_TO_FAN[fan_mode] or FAN_AUTO
-  device:set_field("fan_speed_ac", fan)
-  save_current_mode_field(device, "fan_speed", fan_mode)
-  send_ac_code(device, { fan=fan })
+  local fan_mode = cmd.args.fanMode -- "low" / "medium" / "high"
+  local fan      = MODE_TO_FAN[fan_mode] or FAN_MID
+  device:set_field("fan_mode_ac", fan)
+  save_current_mode_field(device, "fan_mode", fan_mode)
+  send_ac_code(device, { fan = fan })
   device:emit_event(capabilities.mode.mode(fan_mode))
 end
 
--- ──────────────────────────────────────────────
--- [DEVICE → CAPABILITY] 수신 핸들러
--- ──────────────────────────────────────────────
-
+-- zigbee handlers
 local function on_off_attr_handler(driver, device, value, zb_rx)
   device:emit_event(capabilities.switch.switch(value.value and "on" or "off"))
 end
@@ -335,29 +292,27 @@ local function color_temp_handler(driver, device, value, zb_rx)
   device:emit_event(capabilities.colorTemperature.colorTemperature(kelvin))
 end
 
--- ★ AC 압축코드 수신 핸들러 (0xFCC0/0x024F)
--- SDK는 Uint64를 big-endian 8바이트 문자열로 전달
 local function ac_code_attr_handler(driver, device, value, zb_rx)
   local raw = value.value
   local hi32, lo32
 
   if type(raw) == "string" then
-    local b = {string.byte(raw, 1, 8)}
+    local b = { string.byte(raw, 1, 8) }
     hi32 = ((b[1] or 0) << 24) | ((b[2] or 0) << 16) | ((b[3] or 0) << 8) | (b[4] or 0)
     lo32 = ((b[5] or 0) << 24) | ((b[6] or 0) << 16) | ((b[7] or 0) << 8) | (b[8] or 0)
   else
     hi32 = (raw >> 32) & 0xFFFFFFFF
-    lo32 =  raw        & 0xFFFFFFFF
+    lo32 = raw & 0xFFFFFFFF
   end
 
-  local pwr     = (lo32 >> 28) & 0xF
-  local mode    = (lo32 >> 24) & 0xF
-  local fan_set = (lo32 >> 20) & 0xF
-  local b15_8   = (lo32 >>  8) & 0xFF
-  local b7_0    =  lo32        & 0xFF
-  local bits7_2 = (b7_0 >> 2) & 0x3F
+  local pwr          = (lo32 >> 28) & 0xF
+  local mode         = (lo32 >> 24) & 0xF
+  local fan_set      = (lo32 >> 20) & 0xF
+  local b15_8        = (lo32 >> 8) & 0xFF
+  local b7_0         = lo32 & 0xFF
+  local bits7_2      = (b7_0 >> 2) & 0x3F
 
-  -- setpoint 유효 조건: bits15-8≥0xFE, bits7-2=63
+  -- validation check
   local hi_valid     = (b15_8 >= 0xFE) and (bits7_2 == 63)
   local setpoint_raw = (hi32 >> 16) & 0xFFFF
 
@@ -369,14 +324,14 @@ local function ac_code_attr_handler(driver, device, value, zb_rx)
     ))
   end
 
-  -- fan speed 파싱 (bits23-20): 0=low,1=mid,2=high (3=auto 제외)
+  -- fan speed (bits23-20): 0=low,1=mid,2=high
   if fan_set <= 2 then
     local fan_mode = FAN_TO_MODE[fan_set] or "medium"
-    device:set_field("fan_speed_ac", fan_set)
+    device:set_field("fan_mode_ac", fan_set)
     device:emit_event(capabilities.fanMode.fanMode(fan_mode))
   end
 
-  -- swing 상태 파싱 (bits17-16: 0=swing, 1=fixed, 나머지는 업데이트 안 함)
+  -- swing mode (bits17-16: 0=swing, 1=fixed)
   local swing_bit = (lo32 >> 16) & 0x3
   if swing_bit == 0 then
     device:set_field("fan_mode", "swing")
@@ -386,8 +341,7 @@ local function ac_code_attr_handler(driver, device, value, zb_rx)
     device:emit_event(capabilities.fanOscillationMode.fanOscillationMode("fixed"))
   end
 
-  -- pwr=F(no-change/invalid): 모드 동기화 생략
-  if pwr == 0xF then return end
+  if pwr == 0xF then return end -- mode invalid value
 
   local st_mode
   if pwr == 0x0 then
@@ -410,10 +364,6 @@ local function ac_code_attr_handler(driver, device, value, zb_rx)
     device:emit_event(capabilities.thermostatMode.thermostatMode(st_mode))
   end
 end
-
--- ──────────────────────────────────────────────
--- 수명주기
--- ──────────────────────────────────────────────
 
 local SUPPORTED_THERMOSTAT_MODES = {
   capabilities.thermostatMode.thermostatMode.off.NAME,
@@ -450,18 +400,18 @@ end
 
 local function device_added(driver, device)
   if device:get_latest_state("main", capabilities.thermostatHeatingSetpoint.ID,
-      capabilities.thermostatHeatingSetpoint.heatingSetpoint.NAME) == nil then
+        capabilities.thermostatHeatingSetpoint.heatingSetpoint.NAME) == nil then
     device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpoint(
       { value = 25, unit = "C" }
     ))
-    send_ac_code(device, { setpoint=25 })
+    send_ac_code(device, { setpoint = 25 })
   end
   if device:get_latest_state("main", capabilities.fanMode.ID,
-      capabilities.fanMode.fanMode.NAME) == nil then
+        capabilities.fanMode.fanMode.NAME) == nil then
     device:emit_event(capabilities.fanMode.fanMode("medium"))
   end
   if device:get_latest_state("main", capabilities.fanOscillationMode.ID,
-      capabilities.fanOscillationMode.fanOscillationMode.NAME) == nil then
+        capabilities.fanOscillationMode.fanOscillationMode.NAME) == nil then
     device:emit_event(capabilities.fanOscillationMode.fanOscillationMode("swing"))
   end
 end
@@ -469,7 +419,7 @@ end
 local function send_night_light(device, new)
   local start_min = (tonumber(new.nightLightStartHour) * 60) & 0xFFF
   local end_half  = (tonumber(new.nightLightEndHour) * 60) & 0xFFF
-  local on_val    = (start_min << 12) | end_half
+  local on_val    = (end_half << 12) | start_min
   local val       = new.nightLightMode and on_val or (on_val + 1)
   device:send(cluster_base.write_manufacturer_specific_attribute(
     device, aqara.CLUSTER_ID, aqara.ATTR_NIGHT_LIGHT,
@@ -484,42 +434,32 @@ local function info_changed(driver, device, event, args)
   local old = args.old_st_store.preferences
   local new = device.preferences
 
-  -- ① 야간 조명 모드 (0x0518, Uint32)
-  --   bits23-12: 시작시간(분)  bits11-0: 종료시간(분×2)
-  --   ON  = (시작분 << 12) | (종료분 × 2)
-  --   OFF = 현재 ON 값 + 1
+  -- night-light mode
   local mode_changed = old.nightLightMode ~= new.nightLightMode
   local time_changed =
-    old.nightLightStartHour ~= new.nightLightStartHour or
-    old.nightLightEndHour   ~= new.nightLightEndHour
+      old.nightLightStartHour ~= new.nightLightStartHour or
+      old.nightLightEndHour ~= new.nightLightEndHour
   if mode_changed then
     send_night_light(device, new)
   elseif time_changed and new.nightLightMode == true then
     send_night_light(device, new)
   end
 
-  -- ② 동작 비프음 소거 (0x0256, Uint8)
+  -- mute beep sound
   if old.muteBeep ~= new.muteBeep or device:get_field("inited") == nil then
     local val = new.muteBeep and 1 or 0
     device:set_field("inited", true)
     device:send(cluster_base.write_manufacturer_specific_attribute(
-      device, aqara.CLUSTER_ID, aqara.ATTR_DND_SWITCH,
+      device, aqara.CLUSTER_ID, aqara.ATTR_DND_BEEP,
       aqara.MFG_CODE, data_types.Uint8, val))
-    if val == 0 then
+    if val == 0 then -- 24hour
       device:send(cluster_base.write_manufacturer_specific_attribute(
         device, aqara.CLUSTER_ID, aqara.ATTR_DND_TIME,
         aqara.MFG_CODE, data_types.Uint32, 0x00120012))
     end
   end
 
-  -- ③ 색온도 동기화 (0x02A6, Boolean)
-  if old.colorTempSync ~= new.colorTempSync then
-    device:send(cluster_base.write_manufacturer_specific_attribute(
-      device, aqara.CLUSTER_ID, aqara.ATTR_BATH_LIGHT_MODE,
-      aqara.MFG_CODE, data_types.Boolean, new.colorTempSync and true or false))
-  end
-
-  -- ④ 항온 모드 (0x02BE, Uint8)
+  -- constant temperature mode
   if old.thermostatCtrl ~= new.thermostatCtrl then
     device:send(cluster_base.write_manufacturer_specific_attribute(
       device, aqara.CLUSTER_ID, aqara.ATTR_THERMOSTAT_CTRL_SW,
@@ -527,9 +467,6 @@ local function info_changed(driver, device, event, args)
   end
 end
 
--- ──────────────────────────────────────────────
--- 드라이버
--- ──────────────────────────────────────────────
 local aqara_bathroom_heater_driver = ZigbeeDriver("aqara-bathroom-heater-t1", {
   supported_capabilities = {
     capabilities.switch,
@@ -578,7 +515,7 @@ local aqara_bathroom_heater_driver = ZigbeeDriver("aqara-bathroom-heater-t1", {
         [ColorControl.attributes.ColorTemperatureMireds.ID] = color_temp_handler,
       },
       [aqara.CLUSTER_ID] = {
-        [aqara.ATTR_AC_CODE] = ac_code_attr_handler,  -- 0x024F
+        [aqara.ATTR_AC_CODE] = ac_code_attr_handler,
       },
     },
   },
