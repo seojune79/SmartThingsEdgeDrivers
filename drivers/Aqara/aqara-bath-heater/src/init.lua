@@ -256,7 +256,7 @@ local function handle_heating_setpoint(driver, device, cmd)
   ))
 end
 
-local function handle_fan_mode(driver, device, cmd)
+local function handle_fan_oscillation_mode(driver, device, cmd)
   local st_fan = cmd.args.fanOscillationMode
   local swing  = ST_FAN_TO_SWING[st_fan] or SWING_ON
 
@@ -266,13 +266,12 @@ local function handle_fan_mode(driver, device, cmd)
   device:emit_event(capabilities.fanOscillationMode.fanOscillationMode(st_fan))
 end
 
-local function handle_mode(driver, device, cmd)
+local function handle_fan_mode(driver, device, cmd)
   local fan_mode = cmd.args.fanMode -- "low" / "medium" / "high"
   local fan      = MODE_TO_FAN[fan_mode] or FAN_MID
   device:set_field("fan_mode_ac", fan)
   save_current_mode_field(device, "fan_mode", fan_mode)
   send_ac_code(device, { fan = fan })
-  device:emit_event(capabilities.mode.mode(fan_mode))
 end
 
 -- zigbee handlers
@@ -496,10 +495,10 @@ local aqara_bathroom_heater_driver = ZigbeeDriver("aqara-bathroom-heater-t1", {
       [capabilities.thermostatHeatingSetpoint.commands.setHeatingSetpoint.NAME] = handle_heating_setpoint,
     },
     [capabilities.fanOscillationMode.ID] = {
-      [capabilities.fanOscillationMode.commands.setFanOscillationMode.NAME] = handle_fan_mode,
+      [capabilities.fanOscillationMode.commands.setFanOscillationMode.NAME] = handle_fan_oscillation_mode,
     },
     [capabilities.fanMode.ID] = {
-      [capabilities.fanMode.commands.setFanMode.NAME] = handle_mode,
+      [capabilities.fanMode.commands.setFanMode.NAME] = handle_fan_mode,
     },
   },
 
