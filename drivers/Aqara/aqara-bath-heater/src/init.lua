@@ -12,6 +12,12 @@ local OnOff           = zcl_clusters.OnOff
 local Level           = zcl_clusters.Level
 local ColorControl    = zcl_clusters.ColorControl
 
+local nightLightMode = "stse.nightLightMode"
+local nightLightEndTime = "stse.nightLightEndTime"
+local nightLightStartTime = "stse.nightLightStartTime"
+local muteBeep = "stse.muteBeep"
+local thermostatCtrl = "stse.thermostatCtrl"
+
 local PWR             = { OFF = 0x0, ON = 0x1 }
 -- AC mode bits27-24:
 --   0 = heat
@@ -416,10 +422,11 @@ local function device_added(driver, device)
 end
 
 local function send_night_light(device, new)
-  local start_min = (tonumber(new.nightLightStartHour) * 60) & 0xFFF
-  local end_half  = (tonumber(new.nightLightEndHour) * 60) & 0xFFF
-  local on_val    = (end_half << 12) | start_min
-  local val       = new.nightLightMode and on_val or (on_val + 1)
+  local start_time = (tonumber(new[nightLightStartTime]) * 60) & 0xFFF
+  local end_time  = (tonumber(new[nightLightEndTime]) * 60) & 0xFFF
+  local on_val    = (end_time << 12) | start_time
+  -- local on_val    = (start_time << 12) | end_time
+  local val       = new[nightLightMode] and on_val or (on_val + 1)
   device:send(cluster_base.write_manufacturer_specific_attribute(
     device, aqara.CLUSTER_ID, aqara.ATTR_NIGHT_LIGHT,
     aqara.MFG_CODE, data_types.Uint32, val))
@@ -434,19 +441,19 @@ local function info_changed(driver, device, event, args)
   local new = device.preferences
 
   -- night-light mode
-  local mode_changed = old.nightLightMode ~= new.nightLightMode
+  local mode_changed = old[nightLightMode] ~= new[nightLightMode]
   local time_changed =
-      old.nightLightStartHour ~= new.nightLightStartHour or
-      old.nightLightEndHour ~= new.nightLightEndHour
+      old[nightLightEndTime] ~= new[nightLightEndTime] or
+      old[nightLightStartTime] ~= new[nightLightStartTime]
   if mode_changed then
     send_night_light(device, new)
-  elseif time_changed and new.nightLightMode == true then
+  elseif time_changed and new[nightLightMode] == true then
     send_night_light(device, new)
   end
 
   -- mute beep sound
-  if old.muteBeep ~= new.muteBeep or device:get_field("inited") == nil then
-    local val = new.muteBeep and 1 or 0
+  if old[muteBeep] ~= new[muteBeep] or device:get_field("inited") == nil then
+    local val = new[muteBeep] and 1 or 0
     device:set_field("inited", true)
     device:send(cluster_base.write_manufacturer_specific_attribute(
       device, aqara.CLUSTER_ID, aqara.ATTR_DND_BEEP,
@@ -459,10 +466,10 @@ local function info_changed(driver, device, event, args)
   end
 
   -- constant temperature mode
-  if old.thermostatCtrl ~= new.thermostatCtrl then
+  if old[thermostatCtrl] ~= new[thermostatCtrl] then
     device:send(cluster_base.write_manufacturer_specific_attribute(
       device, aqara.CLUSTER_ID, aqara.ATTR_THERMOSTAT_CTRL_SW,
-      aqara.MFG_CODE, data_types.Uint8, new.thermostatCtrl and 1 or 0))
+      aqara.MFG_CODE, data_types.Uint8, new[thermostatCtrl] and 1 or 0))
   end
 end
 
