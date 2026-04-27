@@ -1,7 +1,6 @@
 name: aqara-bath-heater
 components:
   - id: main
-    label: "욕실 난방/환풍"
     capabilities:
       - id: switch
       - id: switchLevel
@@ -167,45 +166,3 @@ preferences:
     explicit: true
   - preferenceId: stse.thermostatCtrl
     explicit: true
-
-
-  # - title: "Night-light mode"
-  #   description: "Activates dim, low color temperature lighting during the set time period."
-  #   name: nightLightMode
-  #   required: false
-  #   preferenceType: boolean
-  #   definition:
-  #     id: nightLightMode
-  #     default: false
-  # - title: "Night-light start time(0~23)"
-  #   name: nightLightStartHour
-  #   required: false
-  #   preferenceType: integer
-  #   definition:
-  #     minimum: 0
-  #     maximum: 23
-  #     default: 21
-  # - title: "Night-light end time(0~23, Next day)"
-  #   name: nightLightEndHour
-  #   required: false
-  #   preferenceType: integer
-  #   definition:
-  #     minimum: 0
-  #     maximum: 23
-  #     default: 9
-  # - title: "Mute operation beep"
-  #   description: "Silences the device operation beep sounds."
-  #   name: muteBeep
-  #   required: false
-  #   preferenceType: boolean
-  #   definition:
-  #     id: muteBeep
-  #     default: false
-  # - title: "Constant temperature mode"
-  #   description: "Automatically maintains the target temperature by adjusting warm airflow."
-  #   name: thermostatCtrl
-  #   required: false
-  #   preferenceType: boolean
-  #   definition:
-  #     id: thermostatCtrl
-  #     default: true
