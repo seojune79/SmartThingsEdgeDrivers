@@ -425,7 +425,6 @@ local function send_night_light(device, new)
   local start_time = (tonumber(new[nightLightStartTime]) * 60) & 0xFFF
   local end_time  = (tonumber(new[nightLightEndTime]) * 60) & 0xFFF
   local on_val    = (end_time << 12) | start_time
-  -- local on_val    = (start_time << 12) | end_time
   local val       = new[nightLightMode] and on_val or (on_val + 1)
   device:send(cluster_base.write_manufacturer_specific_attribute(
     device, aqara.CLUSTER_ID, aqara.ATTR_NIGHT_LIGHT,
