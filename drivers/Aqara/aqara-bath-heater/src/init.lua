@@ -12,71 +12,84 @@ local OnOff           = zcl_clusters.OnOff
 local Level           = zcl_clusters.Level
 local ColorControl    = zcl_clusters.ColorControl
 
+-- Aqara manufacturer-specific preference keys
 local nightLightMode = "stse.nightLightMode"
 local nightLightEndTime = "stse.nightLightEndTime"
 local nightLightStartTime = "stse.nightLightStartTime"
 local muteBeep = "stse.muteBeep"
 local thermostatCtrl = "stse.thermostatCtrl"
 
+-- AC code field values (see send_ac_code for the bit layout)
 local PWR             = { OFF = 0x0, ON = 0x1 }
--- AC mode bits27-24:
---   0 = heat
---   3 = dryair
---   4 = cool
---   5 = fanonly
 local MODE            = { HEAT = 0x0, DRYAIR = 0x3, COOL = 0x4, FANONLY = 0x5, INVALID = 0xF }
--- bits23-20: fan speed
---   0=low  1=middle  2=high
 local FAN_LOW         = 0x0
 local FAN_MID         = 0x1
 local FAN_HIGH        = 0x2
 local FAN_INVALID     = 0xF
+local SWING_ON        = 0x0
+local SWING_OFF       = 0x1
 
-local MODE_TO_FAN     = { ["low"] = FAN_LOW, ["medium"] = FAN_MID, ["high"] = FAN_HIGH }
-local FAN_TO_MODE     = { [0] = "low", [1] = "medium", [2] = "high", [3] = "medium" }
--- bits17-16: fanOscillationMode
---   swing=0
---   fix=1
-local SWING_ON        = 0x0 -- bits17-16 = 00 (swing)
-local SWING_OFF       = 0x1 -- bits17-16 = 01 (fixed)
+-- SmartThings fanMode capability values
+local SPEED           = {
+  LOW    = "low",
+  MEDIUM = "medium",
+  HIGH   = "high",
+}
+local MODE_TO_FAN     = { [SPEED.LOW] = FAN_LOW, [SPEED.MEDIUM] = FAN_MID, [SPEED.HIGH] = FAN_HIGH }
+local FAN_TO_MODE     = { [0] = SPEED.LOW, [1] = SPEED.MEDIUM, [2] = SPEED.HIGH }
+
+-- SmartThings fanOscillationMode capability values
+local OSC             = {
+  SWING = "swing",
+  FIXED = "fixed",
+}
 local ST_FAN_TO_SWING = {
-  ["swing"] = SWING_ON,
-  ["fixed"] = SWING_OFF,
+  [OSC.SWING] = SWING_ON,
+  [OSC.FIXED] = SWING_OFF,
 }
 
--- SmartThings thermostatMode → AC 파라미터
+-- SmartThings thermostatMode capability values
+local ST_MODE         = {
+  OFF     = "off",
+  HEAT    = "heat",
+  DRYAIR  = "dryair",
+  COOL    = "cool",
+  FANONLY = "fanonly",
+}
+
+-- SmartThings thermostatMode -> AC parameters
 local ST_TO_AC        = {
-  ["off"]     = { pwr = PWR.OFF, mode = MODE.INVALID, fan = FAN_INVALID },
-  ["heat"]    = { pwr = PWR.ON, mode = MODE.HEAT, fan = FAN_MID },
-  ["dryair"]  = { pwr = PWR.ON, mode = MODE.DRYAIR, fan = FAN_MID },
-  ["cool"]    = { pwr = PWR.ON, mode = MODE.COOL, fan = FAN_MID },
-  ["fanonly"] = { pwr = PWR.ON, mode = MODE.FANONLY, fan = FAN_MID },
+  [ST_MODE.OFF]     = { pwr = PWR.OFF, mode = MODE.INVALID, fan = FAN_INVALID },
+  [ST_MODE.HEAT]    = { pwr = PWR.ON, mode = MODE.HEAT, fan = FAN_MID },
+  [ST_MODE.DRYAIR]  = { pwr = PWR.ON, mode = MODE.DRYAIR, fan = FAN_MID },
+  [ST_MODE.COOL]    = { pwr = PWR.ON, mode = MODE.COOL, fan = FAN_MID },
+  [ST_MODE.FANONLY] = { pwr = PWR.ON, mode = MODE.FANONLY, fan = FAN_MID },
 }
 
--- AC mode to thermostatMode capability
+-- AC mode bits -> SmartThings thermostatMode
 local AC_MODE_TO_ST   = {
-  [0x0] = "heat",
-  [0x3] = "dryair",
-  [0x4] = "cool",
-  [0x5] = "fanonly",
+  [0x0] = ST_MODE.HEAT,
+  [0x3] = ST_MODE.DRYAIR,
+  [0x4] = ST_MODE.COOL,
+  [0x5] = ST_MODE.FANONLY,
 }
 
--- Color Temperature Range
+-- Color temperature range (mireds) for the LED light
 local MIRED_MIN       = 153
 local MIRED_MAX       = 370
 
--- utility
 local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 local function kelvin_to_mired(k) return math.floor(1000000 / k) end
 local function mired_to_kelvin(m) return math.floor(1000000 / m) end
 
--- AC code
--- default: 0xFFFFFFFFFFFFFFFF
---   pwr      : bits31-28  0=off 1=on
---   mode     : bits27-24  0=heat 3=dry 4=blow 5=vent
---   fan      : bits23-20  0=low 1=mid 2=high 3=auto
---   swing    : bits17-16  0=swing 1=fixed
---   setpoint : °C         hi32 bits63-48 (×0.01°C)
+-- Encode and send the 64-bit AC control code as an Aqara manufacturer attribute.
+-- A nibble of 0xF means "no change"; the default 0xFFFFFFFFFFFFFFFF leaves
+-- every field untouched so callers only need to set what they want to change.
+--   pwr      : bits31-28  0=off    1=on
+--   mode     : bits27-24  0=heat   3=dryair  4=cool  5=fanonly
+--   fan      : bits23-20  0=low    1=mid     2=high  3=auto
+--   swing    : bits17-16  0=swing  1=fixed
+--   setpoint : bits63-48  Celsius x 100
 local function send_ac_code(device, params)
   local hi32 = 0xFFFFFFFF
   local lo32 = 0xFFFFFFFF
@@ -119,19 +132,28 @@ local function send_ac_code(device, params)
   ))
 end
 
--- last status save and restore
-local MODE_FIELDS = {
-  heat    = { "setpoint", "swing", "fan_mode" },
-  cool    = { "swing", "fan_mode" },
-  dryair  = { "swing", "fan_mode" },
-  fanonly = { "fan_mode" },
+-- Per-mode state persistence: remember the last setpoint/swing/fan used in
+-- each thermostat mode so they can be restored when the user returns to it.
+local FIELD = {
+  SETPOINT = "setpoint",
+  SWING    = "swing",
+  FAN_MODE = "fan_mode",
 }
 
+-- Fields tracked per mode (modes not listed here have no per-mode state).
+local MODE_FIELDS = {
+  [ST_MODE.HEAT]    = { FIELD.SETPOINT, FIELD.SWING, FIELD.FAN_MODE },
+  [ST_MODE.COOL]    = { FIELD.SWING, FIELD.FAN_MODE },
+  [ST_MODE.DRYAIR]  = { FIELD.SWING, FIELD.FAN_MODE },
+  [ST_MODE.FANONLY] = { FIELD.FAN_MODE },
+}
+
+-- Initial values when no saved state exists yet for a mode.
 local MODE_DEFAULTS = {
-  heat    = { setpoint = 25, swing = "swing", fan_mode = "medium" },
-  cool    = { swing = "swing", fan_mode = "medium" },
-  dryair  = { swing = "swing", fan_mode = "medium" },
-  fanonly = { fan_mode = "medium" },
+  [ST_MODE.HEAT]    = { setpoint = 25, swing = OSC.SWING, fan_mode = SPEED.MEDIUM },
+  [ST_MODE.COOL]    = { swing = OSC.SWING, fan_mode = SPEED.MEDIUM },
+  [ST_MODE.DRYAIR]  = { swing = OSC.SWING, fan_mode = SPEED.MEDIUM },
+  [ST_MODE.FANONLY] = { fan_mode = SPEED.MEDIUM },
 }
 
 local function save_mode_state(device, mode, field, value)
@@ -143,7 +165,7 @@ local function load_mode_state(device, mode, field)
 end
 
 local function save_current_mode_field(device, field, value)
-  local mode = device:get_field("thermostat_mode") or "off"
+  local mode = device:get_field("thermostat_mode") or ST_MODE.OFF
   local fields = MODE_FIELDS[mode]
   if fields then
     for _, f in ipairs(fields) do
@@ -155,6 +177,36 @@ local function save_current_mode_field(device, field, value)
   end
 end
 
+-- Capture the current capability state for each field tracked by the given
+-- mode. Used right before switching modes so any in-flight changes (e.g., a
+-- setpoint set via the UI but not yet confirmed by the device) are preserved.
+local function snapshot_mode_state(device, mode)
+  local fields = MODE_FIELDS[mode]
+  if not fields then return end
+
+  for _, field in ipairs(fields) do
+    local v
+    if field == FIELD.SETPOINT then
+      v = device:get_latest_state("main",
+        capabilities.thermostatHeatingSetpoint.ID,
+        capabilities.thermostatHeatingSetpoint.heatingSetpoint.NAME)
+    elseif field == FIELD.SWING then
+      v = device:get_latest_state("main",
+        capabilities.fanOscillationMode.ID,
+        capabilities.fanOscillationMode.fanOscillationMode.NAME)
+    elseif field == FIELD.FAN_MODE then
+      v = device:get_latest_state("main",
+        capabilities.fanMode.ID,
+        capabilities.fanMode.fanMode.NAME)
+    end
+    if v ~= nil then
+      save_mode_state(device, mode, field, v)
+    end
+  end
+end
+
+-- Re-emit saved values for the entered mode and push them to the AC in a
+-- single batched code, falling back to MODE_DEFAULTS on first use.
 local function restore_mode_state(device, st_mode)
   local fields = MODE_FIELDS[st_mode]
   if not fields then return end
@@ -163,23 +215,23 @@ local function restore_mode_state(device, st_mode)
   local setpoint, swing, fan = nil, nil, nil
 
   for _, field in ipairs(fields) do
-    if field == "setpoint" then
-      local v = load_mode_state(device, st_mode, "setpoint") or defaults.setpoint
+    if field == FIELD.SETPOINT then
+      local v = load_mode_state(device, st_mode, FIELD.SETPOINT) or defaults.setpoint
       if v ~= nil then
         setpoint = clamp(v, 16, 45)
         device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpoint(
           { value = setpoint, unit = "C" }
         ))
       end
-    elseif field == "swing" then
-      local v = load_mode_state(device, st_mode, "swing") or defaults.swing
+    elseif field == FIELD.SWING then
+      local v = load_mode_state(device, st_mode, FIELD.SWING) or defaults.swing
       if v ~= nil then
         swing = ST_FAN_TO_SWING[v]
         device:set_field("fan_mode", v)
         device:emit_event(capabilities.fanOscillationMode.fanOscillationMode(v))
       end
-    elseif field == "fan_mode" then
-      local v = load_mode_state(device, st_mode, "fan_mode") or defaults.fan_mode
+    elseif field == FIELD.FAN_MODE then
+      local v = load_mode_state(device, st_mode, FIELD.FAN_MODE) or defaults.fan_mode
       if v ~= nil then
         fan = MODE_TO_FAN[v]
         device:set_field("fan_mode_ac", fan)
@@ -194,7 +246,7 @@ local function restore_mode_state(device, st_mode)
 end
 
 
--- capabilitiy handlers
+-- Capability handlers
 local function handle_switch_on(driver, device, cmd)
   device:send(OnOff.server.commands.On(device))
 end
@@ -224,9 +276,14 @@ local function handle_thermostat_mode(driver, device, cmd)
   local ac = ST_TO_AC[st_mode]
   if not ac then return end
 
-  local pwr = (st_mode == "off") and PWR.OFF or PWR.ON
+  local prev_mode = device:get_field("thermostat_mode")
+  if prev_mode and prev_mode ~= st_mode then
+    snapshot_mode_state(device, prev_mode)
+  end
+
+  local pwr = (st_mode == ST_MODE.OFF) and PWR.OFF or PWR.ON
   local setpoint = nil
-  if st_mode == "heat" then
+  if st_mode == ST_MODE.HEAT then
     local state = device:get_latest_state("main",
       capabilities.thermostatHeatingSetpoint.ID,
       capabilities.thermostatHeatingSetpoint.heatingSetpoint.NAME)
@@ -240,7 +297,7 @@ local function handle_thermostat_mode(driver, device, cmd)
   device:emit_event(capabilities.thermostatMode.thermostatMode(st_mode))
   restore_mode_state(device, st_mode)
 
-  if st_mode ~= "off" then
+  if st_mode ~= ST_MODE.OFF then
     device:set_field("pending_on_mode", st_mode)
   else
     device:set_field("pending_on_mode", nil)
@@ -250,10 +307,9 @@ end
 local function handle_heating_setpoint(driver, device, cmd)
   local temp_c = clamp(cmd.args.setpoint, 16, 45)
   device:set_field("heating_setpoint", temp_c)
-  save_current_mode_field(device, "setpoint", temp_c)
 
-  local cur = device:get_field("thermostat_mode") or "off"
-  if cur == "heat" then
+  local cur = device:get_field("thermostat_mode") or ST_MODE.OFF
+  if cur == ST_MODE.HEAT then
     send_ac_code(device, { setpoint = temp_c })
   end
 
@@ -267,20 +323,18 @@ local function handle_fan_oscillation_mode(driver, device, cmd)
   local swing  = ST_FAN_TO_SWING[st_fan] or SWING_ON
 
   device:set_field("fan_mode", st_fan)
-  save_current_mode_field(device, "swing", st_fan)
   send_ac_code(device, { swing = swing })
   device:emit_event(capabilities.fanOscillationMode.fanOscillationMode(st_fan))
 end
 
 local function handle_fan_mode(driver, device, cmd)
-  local fan_mode = cmd.args.fanMode -- "low" / "medium" / "high"
+  local fan_mode = cmd.args.fanMode
   local fan      = MODE_TO_FAN[fan_mode] or FAN_MID
   device:set_field("fan_mode_ac", fan)
-  save_current_mode_field(device, "fan_mode", fan_mode)
   send_ac_code(device, { fan = fan })
 end
 
--- zigbee handlers
+-- Zigbee attribute handlers
 local function on_off_attr_handler(driver, device, value, zb_rx)
   device:emit_event(capabilities.switch.switch(value.value and "on" or "off"))
 end
@@ -297,10 +351,15 @@ local function color_temp_handler(driver, device, value, zb_rx)
   device:emit_event(capabilities.colorTemperature.colorTemperature(kelvin))
 end
 
+-- Decode the AC code reported by the device, emit matching capability events,
+-- and persist the per-mode state so values are restored when the user returns
+-- to that mode.
 local function ac_code_attr_handler(driver, device, value, zb_rx)
   local raw = value.value
   local hi32, lo32
 
+  -- The attribute is a Uint64 but may arrive either as a raw integer or as
+  -- the 8-byte big-endian payload depending on the runtime path.
   if type(raw) == "string" then
     local b = { string.byte(raw, 1, 8) }
     hi32 = ((b[1] or 0) << 24) | ((b[2] or 0) << 16) | ((b[3] or 0) << 8) | (b[4] or 0)
@@ -317,47 +376,57 @@ local function ac_code_attr_handler(driver, device, value, zb_rx)
   local b7_0         = lo32 & 0xFF
   local bits7_2      = (b7_0 >> 2) & 0x3F
 
-  -- validation check
+  -- The setpoint nibbles are only trustworthy when the surrounding sentinel
+  -- bytes match this pattern; otherwise the device is reporting "no change".
   local hi_valid     = (b15_8 >= 0xFE) and (bits7_2 == 63)
   local setpoint_raw = (hi32 >> 16) & 0xFFFF
 
   if hi_valid and setpoint_raw ~= 0xFFFF then
     local sp = setpoint_raw / 100.0
     device:set_field("heating_setpoint", sp)
+    -- Setpoint only belongs to HEAT; other modes do not track it.
+    if device:get_field("thermostat_mode") == ST_MODE.HEAT then
+      save_current_mode_field(device, FIELD.SETPOINT, sp)
+    end
     device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpoint(
       { value = sp, unit = "C" }
     ))
   end
 
-  -- fan speed (bits23-20): 0=low,1=mid,2=high
+  -- fan speed (bits23-20): 0=low, 1=mid, 2=high; 3=auto and 0xF are ignored.
   if fan_set <= 2 then
-    local fan_mode = FAN_TO_MODE[fan_set] or "medium"
+    local fan_mode = FAN_TO_MODE[fan_set] or SPEED.MEDIUM
     device:set_field("fan_mode_ac", fan_set)
+    save_current_mode_field(device, FIELD.FAN_MODE, fan_mode)
     device:emit_event(capabilities.fanMode.fanMode(fan_mode))
   end
 
-  -- swing mode (bits17-16: 0=swing, 1=fixed)
+  -- swing mode (bits17-16): 0=swing, 1=fixed; other values are ignored.
   local swing_bit = (lo32 >> 16) & 0x3
   if swing_bit == 0 then
-    device:set_field("fan_mode", "swing")
-    device:emit_event(capabilities.fanOscillationMode.fanOscillationMode("swing"))
+    device:set_field("fan_mode", OSC.SWING)
+    save_current_mode_field(device, FIELD.SWING, OSC.SWING)
+    device:emit_event(capabilities.fanOscillationMode.fanOscillationMode(OSC.SWING))
   elseif swing_bit == 1 then
-    device:set_field("fan_mode", "fixed")
-    device:emit_event(capabilities.fanOscillationMode.fanOscillationMode("fixed"))
+    device:set_field("fan_mode", OSC.FIXED)
+    save_current_mode_field(device, FIELD.SWING, OSC.FIXED)
+    device:emit_event(capabilities.fanOscillationMode.fanOscillationMode(OSC.FIXED))
   end
 
-  if pwr == 0xF then return end -- mode invalid value
+  -- 0xF in the pwr nibble is the "no change" sentinel; mode bits are unreliable.
+  if pwr == 0xF then return end
 
   local st_mode
   if pwr == 0x0 then
-    st_mode = "off"
+    st_mode = ST_MODE.OFF
   else
-    st_mode = AC_MODE_TO_ST[mode] or "heat"
+    st_mode = AC_MODE_TO_ST[mode] or ST_MODE.HEAT
   end
 
+  -- Suppress a transient "off" report that arrives between a mode change
+  -- request and the device confirming the new mode.
   local pending = device:get_field("pending_on_mode")
-
-  if st_mode ~= "off" then
+  if st_mode ~= ST_MODE.OFF then
     device:set_field("pending_on_mode", nil)
   else
     if pending ~= nil then return end
@@ -383,8 +452,9 @@ local SUPPORTED_FAN_MODES = {
   capabilities.fanOscillationMode.fanOscillationMode.fixed.NAME
 }
 
-local SUPPORTED_SPEED_MODES = { "low", "medium", "high" }
+local SUPPORTED_SPEED_MODES = { SPEED.LOW, SPEED.MEDIUM, SPEED.HIGH }
 
+-- Lifecycle handlers
 local function device_init(driver, device)
   device:emit_event(capabilities.thermostatMode.supportedThermostatModes(
     SUPPORTED_THERMOSTAT_MODES, { visibility = { displayed = false } }
@@ -413,11 +483,11 @@ local function device_added(driver, device)
   end
   if device:get_latest_state("main", capabilities.fanMode.ID,
         capabilities.fanMode.fanMode.NAME) == nil then
-    device:emit_event(capabilities.fanMode.fanMode("medium"))
+    device:emit_event(capabilities.fanMode.fanMode(SPEED.MEDIUM))
   end
   if device:get_latest_state("main", capabilities.fanOscillationMode.ID,
         capabilities.fanOscillationMode.fanOscillationMode.NAME) == nil then
-    device:emit_event(capabilities.fanOscillationMode.fanOscillationMode("swing"))
+    device:emit_event(capabilities.fanOscillationMode.fanOscillationMode(OSC.SWING))
   end
 end
 
@@ -431,15 +501,14 @@ local function send_night_light(device, new)
     aqara.MFG_CODE, data_types.Uint32, val))
 end
 
-local function device_do_configure(driver, device) end
-
 local function info_changed(driver, device, event, args)
   if args.old_st_store.preferences == nil then return end
 
   local old = args.old_st_store.preferences
   local new = device.preferences
 
-  -- night-light mode
+  -- Night-light: re-send when the on/off toggle flips, or when the schedule
+  -- changes while the feature is enabled.
   local mode_changed = old[nightLightMode] ~= new[nightLightMode]
   local time_changed =
       old[nightLightEndTime] ~= new[nightLightEndTime] or
@@ -450,21 +519,23 @@ local function info_changed(driver, device, event, args)
     send_night_light(device, new)
   end
 
-  -- mute beep sound
+  -- Mute beep ("do not disturb"). On first init we always push the value so
+  -- the device matches the preference even if it was changed before pairing.
   if old[muteBeep] ~= new[muteBeep] or device:get_field("inited") == nil then
     local val = new[muteBeep] and 1 or 0
     device:set_field("inited", true)
     device:send(cluster_base.write_manufacturer_specific_attribute(
       device, aqara.CLUSTER_ID, aqara.ATTR_DND_BEEP,
       aqara.MFG_CODE, data_types.Uint8, val))
-    if val == 0 then -- 24hour
+    -- When un-muted, configure the DND window to span 24h (00:18 - 00:18).
+    if val == 0 then
       device:send(cluster_base.write_manufacturer_specific_attribute(
         device, aqara.CLUSTER_ID, aqara.ATTR_DND_TIME,
         aqara.MFG_CODE, data_types.Uint32, 0x00120012))
     end
   end
 
-  -- constant temperature mode
+  -- Constant-temperature thermostat control switch.
   if old[thermostatCtrl] ~= new[thermostatCtrl] then
     device:send(cluster_base.write_manufacturer_specific_attribute(
       device, aqara.CLUSTER_ID, aqara.ATTR_THERMOSTAT_CTRL_SW,
@@ -528,7 +599,6 @@ local aqara_bathroom_heater_driver = ZigbeeDriver("aqara-bathroom-heater-t1", {
   lifecycle_handlers = {
     init        = device_init,
     added       = device_added,
-    doConfigure = device_do_configure,
     infoChanged = info_changed,
   },
 })
