@@ -11,27 +11,27 @@
 -- each individual test body can ignore the init emissions and focus only on
 -- its own test-specific expectations.
 
-local test              = require "integration_test"
-local t_utils           = require "integration_test.utils"
-local capabilities      = require "st.capabilities"
-local zigbee_test_utils = require "integration_test.zigbee_test_utils"
-local cluster_base      = require "st.zigbee.cluster_base"
-local data_types        = require "st.zigbee.data_types"
-local clusters          = require "st.zigbee.zcl.clusters"
+local test                    = require "integration_test"
+local t_utils                 = require "integration_test.utils"
+local capabilities            = require "st.capabilities"
+local zigbee_test_utils       = require "integration_test.zigbee_test_utils"
+local cluster_base            = require "st.zigbee.cluster_base"
+local data_types              = require "st.zigbee.data_types"
+local clusters                = require "st.zigbee.zcl.clusters"
 
-local OnOff             = clusters.OnOff
-local Level             = clusters.Level
-local ColorControl      = clusters.ColorControl
+local OnOff                   = clusters.OnOff
+local Level                   = clusters.Level
+local ColorControl            = clusters.ColorControl
 
-local AQARA_CLUSTER_ID         = 0xFCC0
-local AQARA_MFG_CODE           = 0x115F
-local ATTR_AC_CODE             = 0x024F
-local ATTR_THERMOSTAT_CTRL_SW  = 0x02BE
-local ATTR_DND_BEEP            = 0x0256
-local ATTR_DND_TIME            = 0x0257
-local ATTR_NIGHT_LIGHT         = 0x0518
+local AQARA_CLUSTER_ID        = 0xFCC0
+local AQARA_MFG_CODE          = 0x115F
+local ATTR_AC_CODE            = 0x024F
+local ATTR_THERMOSTAT_CTRL_SW = 0x02BE
+local ATTR_DND_BEEP           = 0x0256
+local ATTR_DND_TIME           = 0x0257
+local ATTR_NIGHT_LIGHT        = 0x0518
 
-local mock_device = test.mock_device.build_test_zigbee_device({
+local mock_device             = test.mock_device.build_test_zigbee_device({
   profile = t_utils.get_profile_definition("aqara-bath-heater.yml"),
   fingerprinted_endpoint_id = 0x01,
   zigbee_endpoints = {
@@ -81,12 +81,12 @@ local function ac_code_bytes(hi32, lo32)
   return string.char(
     (hi32 >> 24) & 0xFF,
     (hi32 >> 16) & 0xFF,
-    (hi32 >> 8)  & 0xFF,
-    hi32         & 0xFF,
+    (hi32 >> 8) & 0xFF,
+    hi32 & 0xFF,
     (lo32 >> 24) & 0xFF,
     (lo32 >> 16) & 0xFF,
-    (lo32 >> 8)  & 0xFF,
-    lo32         & 0xFF
+    (lo32 >> 8) & 0xFF,
+    lo32 & 0xFF
   )
 end
 
@@ -134,8 +134,12 @@ test.register_coroutine_test(
   "Capability switchLevel 50 should scale to zigbee level 0x7F",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "switchLevel", component = "main",
-        command = "setLevel", args = { 50 } } })
+      {
+        capability = "switchLevel",
+        component = "main",
+        command = "setLevel",
+        args = { 50 }
+      } })
     test.socket.zigbee:__expect_send({ mock_device.id,
       Level.server.commands.MoveToLevelWithOnOff(mock_device,
         data_types.Uint8(math.floor(50 / 100 * 0xFE)),
@@ -147,8 +151,12 @@ test.register_coroutine_test(
   "Capability switchLevel 100 should scale to zigbee level 0xFE",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "switchLevel", component = "main",
-        command = "setLevel", args = { 100 } } })
+      {
+        capability = "switchLevel",
+        component = "main",
+        command = "setLevel",
+        args = { 100 }
+      } })
     test.socket.zigbee:__expect_send({ mock_device.id,
       Level.server.commands.MoveToLevelWithOnOff(mock_device,
         data_types.Uint8(0xFE), data_types.Uint16(0x0000)) })
@@ -159,8 +167,12 @@ test.register_coroutine_test(
   "Capability switchLevel 0 should be clamped to 1",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "switchLevel", component = "main",
-        command = "setLevel", args = { 0 } } })
+      {
+        capability = "switchLevel",
+        component = "main",
+        command = "setLevel",
+        args = { 0 }
+      } })
     test.socket.zigbee:__expect_send({ mock_device.id,
       Level.server.commands.MoveToLevelWithOnOff(mock_device,
         data_types.Uint8(math.floor(1 / 100 * 0xFE)),
@@ -178,8 +190,12 @@ test.register_coroutine_test(
   "Capability colorTemperature 4000K should send mired=250",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "colorTemperature", component = "main",
-        command = "setColorTemperature", args = { 4000 } } })
+      {
+        capability = "colorTemperature",
+        component = "main",
+        command = "setColorTemperature",
+        args = { 4000 }
+      } })
     test.socket.zigbee:__expect_send({ mock_device.id,
       ColorControl.server.commands.MoveToColorTemperature(mock_device,
         data_types.Uint16(250), data_types.Uint16(0x0000)) })
@@ -190,8 +206,12 @@ test.register_coroutine_test(
   "Capability colorTemperature 2700K should send mired=370 (boundary)",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "colorTemperature", component = "main",
-        command = "setColorTemperature", args = { 2700 } } })
+      {
+        capability = "colorTemperature",
+        component = "main",
+        command = "setColorTemperature",
+        args = { 2700 }
+      } })
     test.socket.zigbee:__expect_send({ mock_device.id,
       ColorControl.server.commands.MoveToColorTemperature(mock_device,
         data_types.Uint16(370), data_types.Uint16(0x0000)) })
@@ -202,8 +222,12 @@ test.register_coroutine_test(
   "Capability colorTemperature 6500K should send mired=153 (boundary)",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "colorTemperature", component = "main",
-        command = "setColorTemperature", args = { 6500 } } })
+      {
+        capability = "colorTemperature",
+        component = "main",
+        command = "setColorTemperature",
+        args = { 6500 }
+      } })
     test.socket.zigbee:__expect_send({ mock_device.id,
       ColorControl.server.commands.MoveToColorTemperature(mock_device,
         data_types.Uint16(153), data_types.Uint16(0x0000)) })
@@ -222,8 +246,12 @@ test.register_coroutine_test(
   "Capability thermostatMode 'off' should send AC off code and emit event",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatMode", component = "main",
-        command = "setThermostatMode", args = { "off" } } })
+      {
+        capability = "thermostatMode",
+        component = "main",
+        command = "setThermostatMode",
+        args = { "off" }
+      } })
 
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0x0FFFFFFF) | (0x0 << 28)
@@ -239,8 +267,12 @@ test.register_coroutine_test(
   "Capability thermostatMode 'heat' should send AC code and restore defaults",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatMode", component = "main",
-        command = "setThermostatMode", args = { "heat" } } })
+      {
+        capability = "thermostatMode",
+        component = "main",
+        command = "setThermostatMode",
+        args = { "heat" }
+      } })
 
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0x0FFFFFFF) | (0x1 << 28)
@@ -269,8 +301,12 @@ test.register_coroutine_test(
   "Capability thermostatMode 'cool' should send AC code (mode=4)",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatMode", component = "main",
-        command = "setThermostatMode", args = { "cool" } } })
+      {
+        capability = "thermostatMode",
+        component = "main",
+        command = "setThermostatMode",
+        args = { "cool" }
+      } })
 
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0x0FFFFFFF) | (0x1 << 28)
@@ -296,8 +332,12 @@ test.register_coroutine_test(
   "Capability thermostatMode 'dryair' should send AC code (mode=3)",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatMode", component = "main",
-        command = "setThermostatMode", args = { "dryair" } } })
+      {
+        capability = "thermostatMode",
+        component = "main",
+        command = "setThermostatMode",
+        args = { "dryair" }
+      } })
 
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0x0FFFFFFF) | (0x1 << 28)
@@ -323,8 +363,12 @@ test.register_coroutine_test(
   "Capability thermostatMode 'fanonly' should send AC code (mode=5) and restore only fan",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatMode", component = "main",
-        command = "setThermostatMode", args = { "fanonly" } } })
+      {
+        capability = "thermostatMode",
+        component = "main",
+        command = "setThermostatMode",
+        args = { "fanonly" }
+      } })
 
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0x0FFFFFFF) | (0x1 << 28)
@@ -352,8 +396,12 @@ test.register_coroutine_test(
   "Capability heatingSetpoint 28 in non-heat mode emits only event (no AC code)",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatHeatingSetpoint", component = "main",
-        command = "setHeatingSetpoint", args = { 28 } } })
+      {
+        capability = "thermostatHeatingSetpoint",
+        component = "main",
+        command = "setHeatingSetpoint",
+        args = { 28 }
+      } })
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.thermostatHeatingSetpoint.heatingSetpoint({ value = 28, unit = "C" })))
   end
@@ -370,8 +418,12 @@ test.register_coroutine_test(
   function()
     mock_device:set_field("thermostat_mode", "heat")
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatHeatingSetpoint", component = "main",
-        command = "setHeatingSetpoint", args = { 30 } } })
+      {
+        capability = "thermostatHeatingSetpoint",
+        component = "main",
+        command = "setHeatingSetpoint",
+        args = { 30 }
+      } })
 
     local hi32 = ((3000 & 0xFFFF) << 16) | (0xFFFFFFFF & 0xFFFF)
     local lo32 = 0xFFFFFFFF
@@ -387,8 +439,12 @@ test.register_coroutine_test(
   "Capability fanOscillationMode 'swing' sends AC code with swing bits=0",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "fanOscillationMode", component = "main",
-        command = "setFanOscillationMode", args = { "swing" } } })
+      {
+        capability = "fanOscillationMode",
+        component = "main",
+        command = "setFanOscillationMode",
+        args = { "swing" }
+      } })
 
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0xFFFCFFFF) | (0x0 << 16)
@@ -402,8 +458,12 @@ test.register_coroutine_test(
   "Capability fanOscillationMode 'fixed' sends AC code with swing bits=1",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "fanOscillationMode", component = "main",
-        command = "setFanOscillationMode", args = { "fixed" } } })
+      {
+        capability = "fanOscillationMode",
+        component = "main",
+        command = "setFanOscillationMode",
+        args = { "fixed" }
+      } })
 
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0xFFFCFFFF) | (0x1 << 16)
@@ -419,8 +479,12 @@ test.register_coroutine_test(
   "Capability fanMode 'low' sends AC code with fan bits=0",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "fanMode", component = "main",
-        command = "setFanMode", args = { "low" } } })
+      {
+        capability = "fanMode",
+        component = "main",
+        command = "setFanMode",
+        args = { "low" }
+      } })
     expect_ac_code_send(0xFFFFFFFF, (0xFFFFFFFF & 0xFF0FFFFF) | (0x0 << 20))
   end
 )
@@ -429,8 +493,12 @@ test.register_coroutine_test(
   "Capability fanMode 'medium' sends AC code with fan bits=1",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "fanMode", component = "main",
-        command = "setFanMode", args = { "medium" } } })
+      {
+        capability = "fanMode",
+        component = "main",
+        command = "setFanMode",
+        args = { "medium" }
+      } })
     expect_ac_code_send(0xFFFFFFFF, (0xFFFFFFFF & 0xFF0FFFFF) | (0x1 << 20))
   end
 )
@@ -439,8 +507,12 @@ test.register_coroutine_test(
   "Capability fanMode 'high' sends AC code with fan bits=2",
   function()
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "fanMode", component = "main",
-        command = "setFanMode", args = { "high" } } })
+      {
+        capability = "fanMode",
+        component = "main",
+        command = "setFanMode",
+        args = { "high" }
+      } })
     expect_ac_code_send(0xFFFFFFFF, (0xFFFFFFFF & 0xFF0FFFFF) | (0x2 << 20))
   end
 )
@@ -670,9 +742,9 @@ test.register_coroutine_test(
 
     local hi32 = 0xFFFFFFFF
     local lo32 = 0xFFFFFFFF
-    lo32 = (lo32 & 0x0FFFFFFF) | (0x0 << 28)  -- pwr=0 (off)
-    lo32 = (lo32 & 0xFF0FFFFF) | (0x1 << 20)  -- fan=1 (medium)
-    lo32 = (lo32 & 0xFFFCFFFF) | (0x0 << 16)  -- swing bits=00 (swing)
+    lo32 = (lo32 & 0x0FFFFFFF) | (0x0 << 28) -- pwr=0 (off)
+    lo32 = (lo32 & 0xFF0FFFFF) | (0x1 << 20) -- fan=1 (medium)
+    lo32 = (lo32 & 0xFFFCFFFF) | (0x0 << 16) -- swing bits=00 (swing)
 
     test.socket.zigbee:__queue_receive({ mock_device.id, build_ac_code_report(hi32, lo32) })
 
@@ -712,10 +784,10 @@ test.register_coroutine_test(
     -- though setpoint_raw != 0xFFFF.
     local hi32 = (2800 << 16) | 0x0000
     local lo32 = 0xFFFFFFFF
-    lo32 = (lo32 & 0x0FFFFFFF) | (0x1 << 28)  -- pwr=1 (on)
-    lo32 = (lo32 & 0xF0FFFFFF) | (0x0 << 24)  -- mode=0 (heat)
-    lo32 = (lo32 & 0xFF0FFFFF) | (0x1 << 20)  -- fan=1 (medium)
-    lo32 = lo32 & 0xFFFF00FF                  -- b15_8 = 0x00 → frame invalid
+    lo32 = (lo32 & 0x0FFFFFFF) | (0x1 << 28) -- pwr=1 (on)
+    lo32 = (lo32 & 0xF0FFFFFF) | (0x0 << 24) -- mode=0 (heat)
+    lo32 = (lo32 & 0xFF0FFFFF) | (0x1 << 20) -- fan=1 (medium)
+    lo32 = lo32 & 0xFFFF00FF                 -- b15_8 = 0x00 → frame invalid
 
     test.socket.zigbee:__queue_receive({ mock_device.id, build_ac_code_report(hi32, lo32) })
 
@@ -760,9 +832,9 @@ test.register_coroutine_test(
 -- info_changed helpers --------------------------------------------------------
 
 local function expected_night_light_value(start_h, end_h, enabled)
-  local start_min = (start_h * 60) & 0xFFF
-  local end_min   = (end_h   * 60) & 0xFFF
-  local on_val    = (end_min << 12) | start_min
+  local start_time = (start_h * 60) & 0xFFF
+  local end_time   = (end_h * 60) & 0xFFF
+  local on_val     = (end_time << 12) | start_time
   return enabled and on_val or (on_val + 1)
 end
 
@@ -771,11 +843,10 @@ test.register_coroutine_test(
   function()
     test.socket.device_lifecycle:__queue_receive(mock_device:generate_info_changed({
       preferences = {
-        nightLightMode      = true,
-        nightLightStartHour = 21,
-        nightLightEndHour   = 9,
-        muteBeep            = false,
-        thermostatCtrl      = true,
+        ["stse.nightLightMode"]      = true,
+        ["stse.nightLightStartTime"] = 21,
+        ["stse.nightLightEndTime"]   = 9,
+        ["stse.muteBeep"]            = false
       }
     }))
 
@@ -788,6 +859,7 @@ test.register_coroutine_test(
       cluster_base.write_manufacturer_specific_attribute(mock_device,
         AQARA_CLUSTER_ID, ATTR_DND_BEEP, AQARA_MFG_CODE,
         data_types.Uint8, 0) })
+
     test.socket.zigbee:__expect_send({ mock_device.id,
       cluster_base.write_manufacturer_specific_attribute(mock_device,
         AQARA_CLUSTER_ID, ATTR_DND_TIME, AQARA_MFG_CODE,
@@ -805,7 +877,11 @@ test.register_coroutine_test(
     -- not fire. First flip it ON (consuming the resulting "enabled" write),
     -- then flip it OFF — which is the transition this test actually covers.
     test.socket.device_lifecycle:__queue_receive(mock_device:generate_info_changed({
-      preferences = { nightLightMode = true }
+      preferences = {
+        ["stse.nightLightMode"]      = true,
+        ["stse.nightLightStartTime"] = 21,
+        ["stse.nightLightEndTime"]   = 9
+      }
     }))
     test.socket.zigbee:__expect_send({ mock_device.id,
       cluster_base.write_manufacturer_specific_attribute(mock_device,
@@ -813,8 +889,13 @@ test.register_coroutine_test(
         data_types.Uint32, expected_night_light_value(21, 9, true)) })
 
     test.socket.device_lifecycle:__queue_receive(mock_device:generate_info_changed({
-      preferences = { nightLightMode = false }
+      preferences = {
+        ["stse.nightLightMode"]      = false,
+        ["stse.nightLightStartTime"] = 21,
+        ["stse.nightLightEndTime"]   = 9
+      }
     }))
+
     test.socket.zigbee:__expect_send({ mock_device.id,
       cluster_base.write_manufacturer_specific_attribute(mock_device,
         AQARA_CLUSTER_ID, ATTR_NIGHT_LIGHT, AQARA_MFG_CODE,
@@ -828,17 +909,26 @@ test.register_coroutine_test(
     mock_device:set_field("inited", true)
     test.socket.device_lifecycle:__queue_receive(mock_device:generate_info_changed({
       preferences = {
-        nightLightMode      = true,
-        nightLightStartHour = 22,
-        nightLightEndHour   = 8,
-        muteBeep            = false,
-        thermostatCtrl      = true,
+        ["stse.nightLightMode"]      = true,
+        ["stse.nightLightStartTime"] = 22,
+        ["stse.nightLightEndTime"]   = 8
       }
     }))
     test.socket.zigbee:__expect_send({ mock_device.id,
       cluster_base.write_manufacturer_specific_attribute(mock_device,
         AQARA_CLUSTER_ID, ATTR_NIGHT_LIGHT, AQARA_MFG_CODE,
         data_types.Uint32, expected_night_light_value(22, 8, true)) })
+    test.socket.device_lifecycle:__queue_receive(mock_device:generate_info_changed({
+      preferences = {
+        ["stse.nightLightMode"]      = true,
+        ["stse.nightLightStartTime"] = 21,
+        ["stse.nightLightEndTime"]   = 9
+      }
+    }))
+    test.socket.zigbee:__expect_send({ mock_device.id,
+      cluster_base.write_manufacturer_specific_attribute(mock_device,
+        AQARA_CLUSTER_ID, ATTR_NIGHT_LIGHT, AQARA_MFG_CODE,
+        data_types.Uint32, expected_night_light_value(21, 9, true)) })
   end
 )
 
@@ -848,11 +938,7 @@ test.register_coroutine_test(
     mock_device:set_field("inited", true)
     test.socket.device_lifecycle:__queue_receive(mock_device:generate_info_changed({
       preferences = {
-        nightLightMode      = false,
-        nightLightStartHour = 21,
-        nightLightEndHour   = 9,
-        muteBeep            = true,
-        thermostatCtrl      = true,
+        ["stse.muteBeep"] = true
       }
     }))
     test.socket.zigbee:__expect_send({ mock_device.id,
@@ -868,11 +954,7 @@ test.register_coroutine_test(
     mock_device:set_field("inited", true)
     test.socket.device_lifecycle:__queue_receive(mock_device:generate_info_changed({
       preferences = {
-        nightLightMode      = false,
-        nightLightStartHour = 21,
-        nightLightEndHour   = 9,
-        muteBeep            = false,
-        thermostatCtrl      = false,
+        ["stse.thermostatCtrl"] = false,
       }
     }))
     test.socket.zigbee:__expect_send({ mock_device.id,
@@ -883,18 +965,18 @@ test.register_coroutine_test(
 )
 
 test.register_coroutine_test(
-  "infoChanged with identical prefs (already inited) should not send anything",
+  "infoChanged when not yet initialized should trigger initialization",
   function()
-    mock_device:set_field("inited", true)
+    -- mock_device:set_field("inited", "")
     test.socket.device_lifecycle:__queue_receive(mock_device:generate_info_changed({
       preferences = {
-        nightLightMode      = false,
-        nightLightStartHour = 21,
-        nightLightEndHour   = 9,
-        muteBeep            = false,
-        thermostatCtrl      = true,
+        ["stse.muteBeep"] = true
       }
     }))
+    test.socket.zigbee:__expect_send({ mock_device.id,
+      cluster_base.write_manufacturer_specific_attribute(mock_device,
+        AQARA_CLUSTER_ID, ATTR_DND_BEEP, AQARA_MFG_CODE,
+        data_types.Uint8, 1) })
   end
 )
 
@@ -911,16 +993,24 @@ test.register_coroutine_test(
     -- emits the event, which updates the attribute's latest state. The current
     -- thermostat_mode is still "off" (default), so no AC-code write happens here.
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatHeatingSetpoint", component = "main",
-        command = "setHeatingSetpoint", args = { 30 } } })
+    {
+        capability = "thermostatHeatingSetpoint",
+        component = "main",
+        command = "setHeatingSetpoint",
+        args = { 30 }
+      } })
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.thermostatHeatingSetpoint.heatingSetpoint({ value = 30, unit = "C" })))
 
     -- Now switch to heat mode. get_latest_state() should return 30 and the
     -- first AC code must carry setpoint=30.
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatMode", component = "main",
-        command = "setThermostatMode", args = { "heat" } } })
+      {
+        capability = "thermostatMode",
+        component = "main",
+        command = "setThermostatMode",
+        args = { "heat" }
+      } })
 
     local hi32 = ((3000 & 0xFFFF) << 16) | (0xFFFFFFFF & 0xFFFF)
     local lo32 = (0xFFFFFFFF & 0x0FFFFFFF) | (0x1 << 28)
@@ -953,8 +1043,12 @@ test.register_coroutine_test(
   function()
     mock_device:set_field("thermostat_mode", "off")
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatHeatingSetpoint", component = "main",
-        command = "setHeatingSetpoint", args = { 22 } } })
+      {
+        capability = "thermostatHeatingSetpoint",
+        component = "main",
+        command = "setHeatingSetpoint",
+        args = { 22 }
+      } })
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.thermostatHeatingSetpoint.heatingSetpoint({ value = 22, unit = "C" })))
   end
@@ -965,8 +1059,12 @@ test.register_coroutine_test(
   function()
     mock_device:set_field("thermostat_mode", "fanonly")
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "fanOscillationMode", component = "main",
-        command = "setFanOscillationMode", args = { "fixed" } } })
+      {
+        capability = "fanOscillationMode",
+        component = "main",
+        command = "setFanOscillationMode",
+        args = { "fixed" }
+      } })
     expect_ac_code_send(0xFFFFFFFF, (0xFFFFFFFF & 0xFFFCFFFF) | (0x1 << 16))
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.fanOscillationMode.fanOscillationMode("fixed")))
@@ -977,12 +1075,16 @@ test.register_coroutine_test(
   "setThermostatMode heat should restore saved setpoint/swing/fan from mode_state",
   function()
     mock_device:set_field("mode_state.heat.setpoint", 35)
-    mock_device:set_field("mode_state.heat.swing",    "fixed")
+    mock_device:set_field("mode_state.heat.swing", "fixed")
     mock_device:set_field("mode_state.heat.fan_mode", "high")
 
     test.socket.capability:__queue_receive({ mock_device.id,
-      { capability = "thermostatMode", component = "main",
-        command = "setThermostatMode", args = { "heat" } } })
+      {
+        capability = "thermostatMode",
+        component = "main",
+        command = "setThermostatMode",
+        args = { "heat" }
+      } })
 
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0x0FFFFFFF) | (0x1 << 28)
