@@ -132,17 +132,17 @@ local function send_ac_code(device, params)
   ))
 end
 
--- Per-mode state persistence: remember the last setpoint/swing/fan used in
--- each thermostat mode so they can be restored when the user returns to it.
+-- Per-mode state persistence: remember the last swing/fan used in each
+-- thermostat mode so they can be restored when the user returns to it.
+-- Setpoint is shared across modes and read directly from the capability state.
 local FIELD = {
-  SETPOINT = "setpoint",
   SWING    = "swing",
   FAN_MODE = "fan_mode",
 }
 
 -- Fields tracked per mode (modes not listed here have no per-mode state).
 local MODE_FIELDS = {
-  [ST_MODE.HEAT]    = { FIELD.SETPOINT, FIELD.SWING, FIELD.FAN_MODE },
+  [ST_MODE.HEAT]    = { FIELD.SWING, FIELD.FAN_MODE },
   [ST_MODE.COOL]    = { FIELD.SWING, FIELD.FAN_MODE },
   [ST_MODE.DRYAIR]  = { FIELD.SWING, FIELD.FAN_MODE },
   [ST_MODE.FANONLY] = { FIELD.FAN_MODE },
@@ -150,7 +150,7 @@ local MODE_FIELDS = {
 
 -- Initial values when no saved state exists yet for a mode.
 local MODE_DEFAULTS = {
-  [ST_MODE.HEAT]    = { setpoint = 25, swing = OSC.SWING, fan_mode = SPEED.MEDIUM },
+  [ST_MODE.HEAT]    = { swing = OSC.SWING, fan_mode = SPEED.MEDIUM },
   [ST_MODE.COOL]    = { swing = OSC.SWING, fan_mode = SPEED.MEDIUM },
   [ST_MODE.DRYAIR]  = { swing = OSC.SWING, fan_mode = SPEED.MEDIUM },
   [ST_MODE.FANONLY] = { fan_mode = SPEED.MEDIUM },
@@ -186,11 +186,7 @@ local function snapshot_mode_state(device, mode)
 
   for _, field in ipairs(fields) do
     local v
-    if field == FIELD.SETPOINT then
-      v = device:get_latest_state("main",
-        capabilities.thermostatHeatingSetpoint.ID,
-        capabilities.thermostatHeatingSetpoint.heatingSetpoint.NAME)
-    elseif field == FIELD.SWING then
+    if field == FIELD.SWING then
       v = device:get_latest_state("main",
         capabilities.fanOscillationMode.ID,
         capabilities.fanOscillationMode.fanOscillationMode.NAME)
@@ -212,18 +208,10 @@ local function restore_mode_state(device, st_mode)
   if not fields then return end
 
   local defaults = MODE_DEFAULTS[st_mode] or {}
-  local setpoint, swing, fan = nil, nil, nil
+  local swing, fan = nil, nil
 
   for _, field in ipairs(fields) do
-    if field == FIELD.SETPOINT then
-      local v = load_mode_state(device, st_mode, FIELD.SETPOINT) or defaults.setpoint
-      if v ~= nil then
-        setpoint = clamp(v, 16, 45)
-        device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpoint(
-          { value = setpoint, unit = "C" }
-        ))
-      end
-    elseif field == FIELD.SWING then
+    if field == FIELD.SWING then
       local v = load_mode_state(device, st_mode, FIELD.SWING) or defaults.swing
       if v ~= nil then
         swing = ST_FAN_TO_SWING[v]
@@ -240,8 +228,8 @@ local function restore_mode_state(device, st_mode)
     end
   end
 
-  if setpoint ~= nil or swing ~= nil or fan ~= nil then
-    send_ac_code(device, { setpoint = setpoint, swing = swing, fan = fan })
+  if swing ~= nil or fan ~= nil then
+    send_ac_code(device, { swing = swing, fan = fan })
   end
 end
 
@@ -282,6 +270,8 @@ local function handle_thermostat_mode(driver, device, cmd)
   end
 
   local pwr = (st_mode == ST_MODE.OFF) and PWR.OFF or PWR.ON
+  -- Setpoint is shared across modes; on entry to HEAT, push the last value
+  -- the user set so the device matches what the UI is currently showing.
   local setpoint = nil
   if st_mode == ST_MODE.HEAT then
     local state = device:get_latest_state("main",
@@ -384,10 +374,6 @@ local function ac_code_attr_handler(driver, device, value, zb_rx)
   if hi_valid and setpoint_raw ~= 0xFFFF then
     local sp = setpoint_raw / 100.0
     device:set_field("heating_setpoint", sp)
-    -- Setpoint only belongs to HEAT; other modes do not track it.
-    if device:get_field("thermostat_mode") == ST_MODE.HEAT then
-      save_current_mode_field(device, FIELD.SETPOINT, sp)
-    end
     device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpoint(
       { value = sp, unit = "C" }
     ))

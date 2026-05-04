@@ -274,6 +274,8 @@ test.register_coroutine_test(
         args = { "heat" }
       } })
 
+    -- No prior heatingSetpoint latest state, so the first AC code carries
+    -- only pwr=1 and mode=0 (no setpoint nibble set).
     local hi32 = 0xFFFFFFFF
     local lo32 = (0xFFFFFFFF & 0x0FFFFFFF) | (0x1 << 28)
     lo32 = (lo32 & 0xF0FFFFFF) | (0x0 << 24)
@@ -283,13 +285,11 @@ test.register_coroutine_test(
       capabilities.thermostatMode.thermostatMode("heat")))
 
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
-      capabilities.thermostatHeatingSetpoint.heatingSetpoint({ value = 25, unit = "C" })))
-    test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.fanOscillationMode.fanOscillationMode("swing")))
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.fanMode.fanMode("medium")))
 
-    local r_hi = ((2500 & 0xFFFF) << 16) | (0xFFFFFFFF & 0xFFFF)
+    local r_hi = 0xFFFFFFFF
     local r_lo = 0xFFFFFFFF
     r_lo = (r_lo & 0xFF0FFFFF) | (0x1 << 20)
     r_lo = (r_lo & 0xFFFCFFFF) | (0x0 << 16)
@@ -987,9 +987,7 @@ test.register_coroutine_test(
 test.register_coroutine_test(
   "thermostatMode heat with existing heatingSetpoint 30 latest state uses 30",
   function()
-    -- mock_device:set_latest_state(..., 30) isn't reliable for the
-    -- heatingSetpoint attribute (which has a compound {value, unit} schema),
-    -- so seed the latest state via the real capability path: setHeatingSetpoint
+    -- Seed the latest state via the real capability path: setHeatingSetpoint
     -- emits the event, which updates the attribute's latest state. The current
     -- thermostat_mode is still "off" (default), so no AC-code write happens here.
     test.socket.capability:__queue_receive({ mock_device.id,
@@ -1020,17 +1018,14 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.thermostatMode.thermostatMode("heat")))
 
-    -- restore_mode_state falls back to defaults because the earlier
-    -- setHeatingSetpoint ran while mode was "off", so save_current_mode_field
-    -- was a no-op for the "heat" bucket (MODE_FIELDS["off"] is nil).
-    test.socket.capability:__expect_send(mock_device:generate_test_message("main",
-      capabilities.thermostatHeatingSetpoint.heatingSetpoint({ value = 25, unit = "C" })))
+    -- restore_mode_state restores swing/fan defaults; setpoint is shared
+    -- across modes and not part of mode_state.
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.fanOscillationMode.fanOscillationMode("swing")))
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.fanMode.fanMode("medium")))
 
-    local r_hi = ((2500 & 0xFFFF) << 16) | (0xFFFFFFFF & 0xFFFF)
+    local r_hi = 0xFFFFFFFF
     local r_lo = 0xFFFFFFFF
     r_lo = (r_lo & 0xFF0FFFFF) | (0x1 << 20)
     r_lo = (r_lo & 0xFFFCFFFF) | (0x0 << 16)
@@ -1072,9 +1067,8 @@ test.register_coroutine_test(
 )
 
 test.register_coroutine_test(
-  "setThermostatMode heat should restore saved setpoint/swing/fan from mode_state",
+  "setThermostatMode heat should restore saved swing/fan from mode_state",
   function()
-    mock_device:set_field("mode_state.heat.setpoint", 35)
     mock_device:set_field("mode_state.heat.swing", "fixed")
     mock_device:set_field("mode_state.heat.fan_mode", "high")
 
@@ -1095,13 +1089,11 @@ test.register_coroutine_test(
       capabilities.thermostatMode.thermostatMode("heat")))
 
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
-      capabilities.thermostatHeatingSetpoint.heatingSetpoint({ value = 35, unit = "C" })))
-    test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.fanOscillationMode.fanOscillationMode("fixed")))
     test.socket.capability:__expect_send(mock_device:generate_test_message("main",
       capabilities.fanMode.fanMode("high")))
 
-    local r_hi = ((3500 & 0xFFFF) << 16) | (0xFFFFFFFF & 0xFFFF)
+    local r_hi = 0xFFFFFFFF
     local r_lo = 0xFFFFFFFF
     r_lo = (r_lo & 0xFF0FFFFF) | (0x2 << 20)
     r_lo = (r_lo & 0xFFFCFFFF) | (0x1 << 16)
